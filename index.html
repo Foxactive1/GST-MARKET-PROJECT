@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sistema de gestão completo para supermercados - InNovaIdeia">
+    <meta name="author" content="Dione Castro Alves - InNovaIdeia">
+    <meta name="keywords" content="supermercado, gestão, PDV, estoque, fidelidade">
+    <meta name="theme-color" content="#0d6efd">
+    
+    <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Supermercado Pro">
+    
+    <!-- Open Graph / Social Media -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Supermercado Pro - Gestão Modular">
+    <meta property="og:description" content="Sistema completo de gestão para supermercados">
+    <meta property="og:site_name" content="InNovaIdeia">
+    
+    <title>Supermercado Pro • Gestão Modular - InNovaIdeia</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
+    
+    <!-- Preconnect to CDNs for better performance -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    
+    <!-- Bootstrap 5 with fallback -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" 
+          rel="stylesheet" 
+          integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" 
+          crossorigin="anonymous"
+          onerror="this.onerror=null; this.href='./lib/bootstrap.min.css'">
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" 
+          rel="stylesheet"
+          onerror="this.onerror=null; this.href='./lib/bootstrap-icons.min.css'">
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js with fallback -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" 
+            defer
+            onerror="this.onerror=null; this.src='./lib/chart.min.js'"></script>
+    
+    <!-- SweetAlert2 with fallback -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11" 
+            defer
+            onerror="this.onerror=null; this.src='./lib/sweetalert2.min.js'"></script>
+    
+    <!-- CSS Principal -->
+    <link rel="stylesheet" href="css/style.css">
+    
+    <!-- Inline Critical CSS for faster initial render -->
+    <style>
+        /* Critical CSS */
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f8f9fa;
+        }
+        
+        .loader-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.3s ease;
+        }
+        
+        .loader-container.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .loader {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #0d6efd;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Prevent FOUC (Flash of Unstyled Content) */
+        main {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        main.loaded {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loader-container" id="globalLoader" aria-label="Carregando aplicação">
+        <div class="text-center">
+            <div class="loader mb-3"></div>
+            <p class="text-muted">Carregando sistema...</p>
+        </div>
+    </div>
+    
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer" role="alert" aria-live="polite" aria-atomic="true"></div>
+    
+    <!-- Skip to main content (Accessibility) -->
+    <a href="#mainContent" class="skip-to-content">Pular para o conteúdo principal</a>
+    
+    <!-- Navbar Principal -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top shadow-sm" role="navigation" aria-label="Navegação principal">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="#" onclick="window.app.switchView('dashboard'); return false;">
+                <i class="bi bi-shop me-2"></i>
+                <span class="brand-text">
+                    <strong>InNovaIdeia</strong>
+                    <small class="d-block text-white-50" style="font-size: 0.7rem; line-height: 1;">Gestão Smart Tech</small>
+                </span>
+            </a>
+            
+            <button class="navbar-toggler" 
+                    type="button" 
+                    data-bs-toggle="collapse" 
+                    data-bs-target="#navbarMain"
+                    aria-controls="navbarMain"
+                    aria-expanded="false"
+                    aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarMain">
+                <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link" 
+                           href="#" 
+                           onclick="window.app.switchView('dashboard'); return false;"
+                           data-view="dashboard"
+                           aria-label="Ir para Dashboard">
+                            <i class="bi bi-speedometer2"></i> Dashboard
+                            <span class="visually-hidden">(Atalho: Ctrl+D)</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" 
+                           href="#" 
+                           onclick="window.app.switchView('pdv'); return false;"
+                           data-view="pdv"
+                           aria-label="Ir para PDV">
+                            <i class="bi bi-cash-register"></i> PDV
+                            <span class="visually-hidden">(Atalho: Ctrl+P)</span>
+                        </a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" 
+                           href="#" 
+                           role="button" 
+                           data-bs-toggle="dropdown"
+                           aria-expanded="false"
+                           aria-haspopup="true">
+                            <i class="bi bi-gear"></i> Gestão
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-label="Menu de gestão">
+                            <li>
+                                <a class="dropdown-item" 
+                                   href="#" 
+                                   onclick="window.app.switchView('estoque'); return false;"
+                                   data-view="estoque">
+                                    <i class="bi bi-box-seam"></i> Estoque
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" 
+                                   href="#" 
+                                   onclick="window.app.switchView('clientes'); return false;"
+                                   data-view="clientes">
+                                    <i class="bi bi-people"></i> Clientes
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" 
+                                   href="#" 
+                                   onclick="window.app.switchView('fidelidade'); return false;"
+                                   data-view="fidelidade">
+                                    <i class="bi bi-award"></i> Fidelidade
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" 
+                           href="#" 
+                           onclick="window.app.switchView('relatorios'); return false;"
+                           data-view="relatorios"
+                           aria-label="Ir para Relatórios">
+                            <i class="bi bi-graph-up"></i> Relatórios
+                            <span class="visually-hidden">(Atalho: Ctrl+R)</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <button class="btn btn-outline-light btn-sm ms-2" 
+                                onclick="window.utils.createBackup()"
+                                aria-label="Fazer backup dos dados">
+                            <i class="bi bi-download"></i> Backup
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="btn btn-outline-light btn-sm ms-2" 
+                                onclick="toggleTheme()"
+                                id="themeToggle"
+                                aria-label="Alternar tema claro/escuro">
+                            <i class="bi bi-moon-stars"></i>
+                        </button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Breadcrumb (optional, can be populated dynamically) -->
+    <nav aria-label="breadcrumb" class="bg-light border-bottom d-none" id="breadcrumbNav">
+        <div class="container-fluid">
+            <ol class="breadcrumb py-2 mb-0" id="breadcrumbList">
+                <li class="breadcrumb-item"><a href="#">Home</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Dashboard</li>
+            </ol>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="container-fluid py-4" id="mainContent" role="main" aria-label="Conteúdo principal">
+        <!-- Os módulos serão carregados aqui dinamicamente -->
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Carregando...</span>
+            </div>
+            <p class="text-muted mt-3">Inicializando aplicação...</p>
+        </div>
+    </main>
+
+    <!-- Footer (optional) -->
+    <footer class="bg-light border-top py-3 mt-5">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col-md-6 text-center text-md-start">
+                    <small class="text-muted">
+                        © 2026 <strong>InNovaIdeia</strong> - Desenvolvido por 
+                        <a href="https://www.linkedin.com/in/dione-castro-alves" target="_blank" rel="noopener">Dione Castro Alves</a>
+                    </small>
+                </div>
+                <div class="col-md-6 text-center text-md-end mt-2 mt-md-0">
+                    <small class="text-muted">
+                        Versão 1.0.0 • 
+                        <a href="mailto:innovaideia2023@gmail.com">Suporte</a> •
+                        <a href="https://github.com/Foxactive1" target="_blank" rel="noopener">GitHub</a>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Modal de Erro Global (fallback) -->
+    <div class="modal fade" id="errorModal" tabindex="-1" aria-labelledby="errorModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="errorModalLabel">
+                        <i class="bi bi-exclamation-triangle"></i> Erro
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body" id="errorModalBody">
+                    Ocorreu um erro inesperado.
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-primary" onclick="location.reload()">Recarregar Página</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts Modulares com defer para melhor performance -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" 
+            integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" 
+            crossorigin="anonymous"
+            defer
+            onerror="this.onerror=null; this.src='./lib/bootstrap.bundle.min.js'"></script>
+    
+    <!-- Core Scripts -->
+    <script src="./js/utils.js" defer></script>
+    <script src="./js/state.js" defer></script>
+    
+    <!-- Components -->
+    <script src="./js/components/modals.js" defer></script>
+    
+    <!-- Modules -->
+    <script src="./js/modules/dashboard.js" defer></script>
+    <script src="./js/modules/pdv.js" defer></script>
+    <script src="./js/modules/estoque.js" defer></script>
+    <script src="./js/modules/clientes.js" defer></script>
+    <script src="./js/modules/relatorios.js" defer></script>
+    <script src="./js/modules/fidelidade.js" defer></script>
+    
+    <!-- App Initialization -->
+    <script src="./js/app.js" defer></script>
+    
+    <!-- Theme Toggle & Global Utilities -->
+    <script>
+        // Theme Toggle Function
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme') || 'light';
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            
+            // Update button icon
+            const icon = document.querySelector('#themeToggle i');
+            if (icon) {
+                icon.className = newTheme === 'light' ? 'bi bi-moon-stars' : 'bi bi-sun-fill';
+            }
+            
+            // Show toast
+            if (window.utils) {
+                window.utils.showToast(`Tema ${newTheme === 'light' ? 'claro' : 'escuro'} ativado`, 'info');
+            }
+        }
+        
+        // Load saved theme on startup
+        (function() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            
+            // Update icon after DOM is ready
+            document.addEventListener('DOMContentLoaded', function() {
+                const icon = document.querySelector('#themeToggle i');
+                if (icon) {
+                    icon.className = savedTheme === 'light' ? 'bi bi-moon-stars' : 'bi bi-sun-fill';
+                }
+            });
+        })();
+        
+        // Global Error Handler
+        window.addEventListener('error', function(e) {
+            console.error('Global error:', e.error);
+            
+            // Show error modal if severe
+            if (e.error && e.error.message) {
+                const errorModal = document.getElementById('errorModal');
+                const errorBody = document.getElementById('errorModalBody');
+                
+                if (errorModal && errorBody) {
+                    errorBody.textContent = e.error.message;
+                    const modal = new bootstrap.Modal(errorModal);
+                    modal.show();
+                }
+            }
+        });
+        
+        // Hide loader when page is fully loaded
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                const loader = document.getElementById('globalLoader');
+                const mainContent = document.getElementById('mainContent');
+                
+                if (loader) {
+                    loader.classList.add('hidden');
+                    setTimeout(function() {
+                        loader.style.display = 'none';
+                    }, 300);
+                }
+                
+                if (mainContent) {
+                    mainContent.classList.add('loaded');
+                }
+            }, 500);
+        });
+        
+        // Update active nav item
+        function updateActiveNav(view) {
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.dataset.view === view) {
+                    link.classList.add('active');
+                }
+            });
+        }
+        
+        // Keyboard shortcuts info
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.shiftKey && e.key === '?') {
+                if (window.utils && window.utils.showAlert) {
+                    window.utils.showAlert(
+                        'Atalhos de Teclado',
+                        'info',
+                        'Ctrl+D: Dashboard\nCtrl+P: PDV\nCtrl+E: Estoque\nCtrl+C: Clientes\nCtrl+R: Relatórios\nCtrl+F: Fidelidade'
+                    );
+                }
+            }
+        });
+        
+        // Service Worker registration (PWA)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                // Descomentar quando tiver service-worker.js
+                // navigator.serviceWorker.register('/service-worker.js')
+                //     .then(reg => console.log('Service Worker registered'))
+                //     .catch(err => console.log('Service Worker registration failed'));
+            });
+        }
+    </script>
+    
+    <!-- Analytics (opcional) -->
+    <!-- 
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-XXXXXXXX-X"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'UA-XXXXXXXX-X');
+    </script>
+    -->
+</body>
+</html>
