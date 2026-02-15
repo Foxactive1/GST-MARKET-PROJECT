@@ -3,32 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- SEO Meta Tags -->
     <meta name="description" content="Sistema de gestão completo para supermercados - InNovaIdeia">
     <meta name="author" content="Dione Castro Alves - InNovaIdeia">
-    <meta name="keywords" content="supermercado, gestão, PDV, estoque, fidelidade">
-    <meta name="theme-color" content="#0d6efd">
+    <meta name="keywords" content="supermercado, gestão, PDV, estoque, fidelidade, ERP, ponto de venda">
+    <meta name="theme-color" content="#0d6efd" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#1a1a1a" media="(prefers-color-scheme: dark)">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy" 
+          content="default-src 'self'; 
+                   script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; 
+                   style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; 
+                   font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net;
+                   img-src 'self' data: https:;
+                   connect-src 'self';">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="SAMEORIGIN">
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     
     <!-- PWA Meta Tags -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Supermercado Pro">
+    <link rel="manifest" href="/manifest.json">
     
     <!-- Open Graph / Social Media -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="Supermercado Pro - Gestão Modular">
-    <meta property="og:description" content="Sistema completo de gestão para supermercados">
+    <meta property="og:description" content="Sistema completo de gestão para supermercados com PDV, estoque e fidelidade">
     <meta property="og:site_name" content="InNovaIdeia">
+    <meta property="og:url" content="https://innovaideia.com/supermercado-pro">
+    <meta property="og:image" content="https://innovaideia.com/images/og-image.png">
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Supermercado Pro - Gestão Modular">
+    <meta name="twitter:description" content="Sistema completo de gestão para supermercados">
+    <meta name="twitter:image" content="https://innovaideia.com/images/twitter-card.png">
     
     <title>Supermercado Pro • Gestão Modular - InNovaIdeia</title>
     
-    <!-- Favicon -->
+    <!-- Favicons (Multi-formato) -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#0d6efd">
     
     <!-- Preconnect to CDNs for better performance -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    
+    <!-- Preload Critical Resources -->
+    <link rel="preload" href="./css/style.css" as="style">
+    <link rel="preload" href="./js/app.js" as="script">
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" as="style">
     
     <!-- Bootstrap 5 with fallback -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" 
@@ -57,14 +92,81 @@
     <!-- CSS Principal -->
     <link rel="stylesheet" href="css/style.css">
     
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Supermercado Pro",
+      "applicationCategory": "BusinessApplication",
+      "operatingSystem": "Web Browser",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "BRL"
+      },
+      "author": {
+        "@type": "Person",
+        "name": "Dione Castro Alves",
+        "url": "https://www.linkedin.com/in/dione-castro-alves",
+        "sameAs": [
+          "https://github.com/Foxactive1",
+          "https://www.linkedin.com/in/dione-castro-alves"
+        ]
+      },
+      "provider": {
+        "@type": "Organization",
+        "name": "InNovaIdeia",
+        "email": "innovaideia2023@gmail.com"
+      },
+      "description": "Sistema de gestão completo para supermercados com PDV, controle de estoque, fidelidade e relatórios",
+      "featureList": [
+        "Ponto de Venda (PDV)",
+        "Gestão de Estoque",
+        "Programa de Fidelidade",
+        "Relatórios e Dashboards",
+        "Gestão de Clientes"
+      ],
+      "screenshot": "https://innovaideia.com/images/screenshot.png",
+      "softwareVersion": "1.0.0",
+      "datePublished": "2026-01-01",
+      "inLanguage": "pt-BR"
+    }
+    </script>
+    
+    <!-- Load Theme Immediately (prevent flash) -->
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('theme');
+            const systemPreference = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            const theme = savedTheme || systemPreference;
+            document.documentElement.setAttribute('data-theme', theme);
+            document.documentElement.setAttribute('data-color-scheme', theme);
+        })();
+    </script>
+    
     <!-- Inline Critical CSS for faster initial render -->
     <style>
         /* Critical CSS */
+        :root {
+            --primary: #0d6efd;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --text-primary: #212529;
+        }
+        
+        [data-theme="dark"] {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #f8f9fa;
+        }
+        
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             margin: 0;
             padding: 0;
-            background: #f8f9fa;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
         }
         
         .loader-container {
@@ -73,7 +175,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: #fff;
+            background: var(--bg-primary);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -89,8 +191,8 @@
         .loader {
             width: 50px;
             height: 50px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #0d6efd;
+            border: 4px solid var(--bg-secondary);
+            border-top: 4px solid var(--primary);
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
@@ -109,14 +211,34 @@
         main.loaded {
             opacity: 1;
         }
+        
+        /* Progress bar */
+        .load-progress {
+            width: 200px;
+            height: 4px;
+            background: var(--bg-secondary);
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 1rem auto 0.5rem;
+        }
+        
+        .load-progress-bar {
+            height: 100%;
+            background: var(--primary);
+            transition: width 0.3s ease;
+        }
     </style>
 </head>
 <body>
-    <!-- Loading Screen -->
-    <div class="loader-container" id="globalLoader" aria-label="Carregando aplicação">
+    <!-- Loading Screen with Progress -->
+    <div class="loader-container" id="globalLoader" aria-label="Carregando aplicação" role="status">
         <div class="text-center">
-            <div class="loader mb-3"></div>
-            <p class="text-muted">Carregando sistema...</p>
+            <div class="loader mb-3" aria-hidden="true"></div>
+            <p class="text-muted mb-2">Carregando sistema...</p>
+            <div class="load-progress">
+                <div class="load-progress-bar" id="loadProgress" style="width: 0%"></div>
+            </div>
+            <small class="text-muted d-block mt-2" id="loadStatus">Inicializando...</small>
         </div>
     </div>
     
@@ -126,129 +248,141 @@
     <!-- Skip to main content (Accessibility) -->
     <a href="#mainContent" class="skip-to-content">Pular para o conteúdo principal</a>
     
-    <!-- Navbar Principal -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top shadow-sm" role="navigation" aria-label="Navegação principal">
-        <div class="container-fluid">
-            <a class="navbar-brand d-flex align-items-center" href="#" onclick="window.app.switchView('dashboard'); return false;">
-                <i class="bi bi-shop me-2"></i>
-                <span class="brand-text">
-                    <strong>InNovaIdeia</strong>
-                    <small class="d-block text-white-50" style="font-size: 0.7rem; line-height: 1;">Gestão Smart Tech</small>
-                </span>
-            </a>
-            
-            <button class="navbar-toggler" 
-                    type="button" 
-                    data-bs-toggle="collapse" 
-                    data-bs-target="#navbarMain"
-                    aria-controls="navbarMain"
-                    aria-expanded="false"
-                    aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            
-            <div class="collapse navbar-collapse" id="navbarMain">
-                <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
-                    <li class="nav-item">
-                        <a class="nav-link" 
-                           href="#" 
-                           onclick="window.app.switchView('dashboard'); return false;"
-                           data-view="dashboard"
-                           aria-label="Ir para Dashboard">
-                            <i class="bi bi-speedometer2"></i> Dashboard
-                            <span class="visually-hidden">(Atalho: Ctrl+D)</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" 
-                           href="#" 
-                           onclick="window.app.switchView('pdv'); return false;"
-                           data-view="pdv"
-                           aria-label="Ir para PDV">
-                            <i class="bi bi-cash-register"></i> PDV
-                            <span class="visually-hidden">(Atalho: Ctrl+P)</span>
-                        </a>
-                    </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" 
-                           href="#" 
-                           role="button" 
-                           data-bs-toggle="dropdown"
-                           aria-expanded="false"
-                           aria-haspopup="true">
-                            <i class="bi bi-gear"></i> Gestão
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-label="Menu de gestão">
-                            <li>
-                                <a class="dropdown-item" 
-                                   href="#" 
-                                   onclick="window.app.switchView('estoque'); return false;"
-                                   data-view="estoque">
-                                    <i class="bi bi-box-seam"></i> Estoque
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" 
-                                   href="#" 
-                                   onclick="window.app.switchView('clientes'); return false;"
-                                   data-view="clientes">
-                                    <i class="bi bi-people"></i> Clientes
-                                </a>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <a class="dropdown-item" 
-                                   href="#" 
-                                   onclick="window.app.switchView('fidelidade'); return false;"
-                                   data-view="fidelidade">
-                                    <i class="bi bi-award"></i> Fidelidade
-                                </a>
-                            </li>
-                        </ul>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" 
-                           href="#" 
-                           onclick="window.app.switchView('relatorios'); return false;"
-                           data-view="relatorios"
-                           aria-label="Ir para Relatórios">
-                            <i class="bi bi-graph-up"></i> Relatórios
-                            <span class="visually-hidden">(Atalho: Ctrl+R)</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <button class="btn btn-outline-light btn-sm ms-2" 
-                                onclick="window.utils.createBackup()"
-                                aria-label="Fazer backup dos dados">
-                            <i class="bi bi-download"></i> Backup
-                        </button>
-                    </li>
-                    <li class="nav-item">
-                        <button class="btn btn-outline-light btn-sm ms-2" 
-                                onclick="toggleTheme()"
-                                id="themeToggle"
-                                aria-label="Alternar tema claro/escuro">
-                            <i class="bi bi-moon-stars"></i>
-                        </button>
-                    </li>
-                </ul>
+    <!-- Header -->
+    <header role="banner">
+        <!-- Navbar Principal -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top shadow-sm" role="navigation" aria-label="Navegação principal">
+            <div class="container-fluid">
+                <a class="navbar-brand d-flex align-items-center" href="#" onclick="window.app.switchView('dashboard'); return false;" aria-label="InNovaIdeia - Voltar ao Dashboard">
+                    <i class="bi bi-shop me-2" aria-hidden="true"></i>
+                    <span class="brand-text">
+                        <strong>InNovaIdeia</strong>
+                        <small class="d-block text-white-50" style="font-size: 0.7rem; line-height: 1;">Gestão Smart Tech</small>
+                    </span>
+                </a>
+                
+                <button class="navbar-toggler" 
+                        type="button" 
+                        data-bs-toggle="collapse" 
+                        data-bs-target="#navbarMain"
+                        aria-controls="navbarMain"
+                        aria-expanded="false"
+                        aria-label="Alternar menu de navegação">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                
+                <div class="collapse navbar-collapse" id="navbarMain">
+                    <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+                        <li class="nav-item">
+                            <a class="nav-link active" 
+                               href="#" 
+                               onclick="window.app.switchView('dashboard'); return false;"
+                               data-view="dashboard"
+                               aria-label="Ir para Dashboard"
+                               aria-current="page">
+                                <i class="bi bi-speedometer2" aria-hidden="true"></i> Dashboard
+                                <span class="visually-hidden">(Atalho: Ctrl+D)</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" 
+                               href="#" 
+                               onclick="window.app.switchView('pdv'); return false;"
+                               data-view="pdv"
+                               aria-label="Ir para PDV - Ponto de Venda">
+                                <i class="bi bi-cash-register" aria-hidden="true"></i> PDV
+                                <span class="visually-hidden">(Atalho: Ctrl+P)</span>
+                            </a>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" 
+                               href="#" 
+                               role="button" 
+                               data-bs-toggle="dropdown"
+                               aria-expanded="false"
+                               aria-haspopup="true"
+                               id="navGestao">
+                                <i class="bi bi-gear" aria-hidden="true"></i> Gestão
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navGestao">
+                                <li>
+                                    <a class="dropdown-item" 
+                                       href="#" 
+                                       onclick="window.app.switchView('estoque'); return false;"
+                                       data-view="estoque">
+                                        <i class="bi bi-box-seam" aria-hidden="true"></i> Estoque
+                                        <span class="visually-hidden">(Atalho: Ctrl+E)</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" 
+                                       href="#" 
+                                       onclick="window.app.switchView('clientes'); return false;"
+                                       data-view="clientes">
+                                        <i class="bi bi-people" aria-hidden="true"></i> Clientes
+                                        <span class="visually-hidden">(Atalho: Ctrl+C)</span>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" 
+                                       href="#" 
+                                       onclick="window.app.switchView('fidelidade'); return false;"
+                                       data-view="fidelidade">
+                                        <i class="bi bi-star" aria-hidden="true"></i> Fidelidade
+                                        <span class="visually-hidden">(Atalho: Ctrl+F)</span>
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" 
+                                       href="#" 
+                                       onclick="window.app.switchView('relatorios'); return false;"
+                                       data-view="relatorios">
+                                        <i class="bi bi-graph-up" aria-hidden="true"></i> Relatórios
+                                        <span class="visually-hidden">(Atalho: Ctrl+R)</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link btn btn-link" 
+                                    onclick="toggleTheme()"
+                                    id="themeToggle"
+                                    aria-label="Alternar tema escuro/claro"
+                                    title="Alternar tema">
+                                <i class="bi bi-moon-stars" aria-hidden="true"></i>
+                                <span class="visually-hidden">Tema</span>
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link btn btn-link" 
+                                    onclick="window.commands?.show()"
+                                    aria-label="Abrir paleta de comandos"
+                                    title="Comandos (Ctrl+K)">
+                                <i class="bi bi-command" aria-hidden="true"></i>
+                                <span class="visually-hidden">Comandos</span>
+                            </button>
+                        </li>
+                    </ul>
+                </div>
             </div>
-        </div>
-    </nav>
-
-    <!-- Breadcrumb (optional, can be populated dynamically) -->
-    <nav aria-label="breadcrumb" class="bg-light border-bottom d-none" id="breadcrumbNav">
-        <div class="container-fluid">
-            <ol class="breadcrumb py-2 mb-0" id="breadcrumbList">
-                <li class="breadcrumb-item"><a href="#">Home</a></li>
-                <li class="breadcrumb-item active" aria-current="page">Dashboard</li>
+        </nav>
+        
+        <!-- Breadcrumbs -->
+        <nav aria-label="Navegação por migalhas de pão" class="container-fluid mt-3" id="breadcrumb" style="display: none;">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item">
+                    <a href="#" onclick="window.app.switchView('dashboard'); return false;">
+                        <i class="bi bi-house-door" aria-hidden="true"></i> Home
+                    </a>
+                </li>
+                <li class="breadcrumb-item active" aria-current="page" id="currentPage">Dashboard</li>
             </ol>
-        </div>
-    </nav>
+        </nav>
+    </header>
 
-    <!-- Main Content Area -->
-    <main class="container-fluid py-4" id="mainContent" role="main" aria-label="Conteúdo principal">
-        <!-- Os módulos serão carregados aqui dinamicamente -->
+    <!-- Main Content -->
+    <main id="mainContent" role="main" class="container-fluid py-4">
         <div class="text-center py-5">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Carregando...</span>
@@ -257,21 +391,31 @@
         </div>
     </main>
 
-    <!-- Footer (optional) -->
-    <footer class="bg-light border-top py-3 mt-5">
+    <!-- Footer -->
+    <footer class="bg-light border-top py-3 mt-5" role="contentinfo">
         <div class="container-fluid">
             <div class="row align-items-center">
                 <div class="col-md-6 text-center text-md-start">
                     <small class="text-muted">
                         © 2026 <strong>InNovaIdeia</strong> - Desenvolvido por 
-                        <a href="https://www.linkedin.com/in/dione-castro-alves" target="_blank" rel="noopener">Dione Castro Alves</a>
+                        <a href="https://www.linkedin.com/in/dione-castro-alves" 
+                           target="_blank" 
+                           rel="noopener noreferrer"
+                           aria-label="LinkedIn de Dione Castro Alves (abre em nova aba)">
+                            Dione Castro Alves
+                        </a>
                     </small>
                 </div>
                 <div class="col-md-6 text-center text-md-end mt-2 mt-md-0">
                     <small class="text-muted">
                         Versão 1.0.0 • 
-                        <a href="mailto:innovaideia2023@gmail.com">Suporte</a> •
-                        <a href="https://github.com/Foxactive1" target="_blank" rel="noopener">GitHub</a>
+                        <a href="mailto:innovaideia2023@gmail.com" aria-label="Enviar email para suporte">Suporte</a> •
+                        <a href="https://github.com/Foxactive1" 
+                           target="_blank" 
+                           rel="noopener noreferrer"
+                           aria-label="GitHub de Dione Castro Alves (abre em nova aba)">
+                            GitHub
+                        </a>
                     </small>
                 </div>
             </div>
@@ -284,18 +428,53 @@
             <div class="modal-content">
                 <div class="modal-header bg-danger text-white">
                     <h5 class="modal-title" id="errorModalLabel">
-                        <i class="bi bi-exclamation-triangle"></i> Erro
+                        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Erro no Sistema
                     </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar modal de erro"></button>
                 </div>
                 <div class="modal-body" id="errorModalBody">
-                    Ocorreu um erro inesperado.
+                    Ocorreu um erro inesperado. Por favor, tente novamente.
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                    <button type="button" class="btn btn-primary" onclick="location.reload()">Recarregar Página</button>
+                    <button type="button" class="btn btn-primary" onclick="location.reload()">
+                        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Recarregar Página
+                    </button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Command Palette Modal -->
+    <div class="modal fade" id="commandPalette" tabindex="-1" aria-labelledby="commandPaletteLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body p-0">
+                    <div class="p-3 border-bottom">
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent border-0">
+                                <i class="bi bi-search" aria-hidden="true"></i>
+                            </span>
+                            <input type="text" 
+                                   class="form-control border-0 shadow-none" 
+                                   placeholder="Digite um comando ou busque..." 
+                                   id="commandInput"
+                                   autocomplete="off"
+                                   aria-label="Campo de busca de comandos">
+                        </div>
+                    </div>
+                    <div class="command-list" id="commandList" role="listbox" aria-label="Lista de comandos disponíveis">
+                        <!-- Comandos serão injetados dinamicamente -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Offline Indicator -->
+    <div class="position-fixed bottom-0 start-50 translate-middle-x mb-3" id="offlineIndicator" style="display: none; z-index: 1080;">
+        <div class="alert alert-warning mb-0 shadow-lg" role="alert">
+            <i class="bi bi-wifi-off" aria-hidden="true"></i> Você está offline. Algumas funcionalidades podem estar limitadas.
         </div>
     </div>
 
@@ -309,6 +488,8 @@
     <!-- Core Scripts -->
     <script src="./js/utils.js" defer></script>
     <script src="./js/state.js" defer></script>
+    <script src="./js/theme.js" defer></script>
+    <script src="./js/commands.js" defer></script>
     
     <!-- Components -->
     <script src="./js/components/modals.js" defer></script>
@@ -324,122 +505,272 @@
     <!-- App Initialization -->
     <script src="./js/app.js" defer></script>
     
-    <!-- Theme Toggle & Global Utilities -->
+    <!-- Inline Essential Scripts -->
     <script>
-        // Theme Toggle Function
-        function toggleTheme() {
-            const html = document.documentElement;
-            const currentTheme = html.getAttribute('data-theme') || 'light';
-            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-            
-            html.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-            
-            // Update button icon
-            const icon = document.querySelector('#themeToggle i');
-            if (icon) {
-                icon.className = newTheme === 'light' ? 'bi bi-moon-stars' : 'bi bi-sun-fill';
-            }
-            
-            // Show toast
-            if (window.utils) {
-                window.utils.showToast(`Tema ${newTheme === 'light' ? 'claro' : 'escuro'} ativado`, 'info');
-            }
+        // Progress tracking
+        let loadProgress = 0;
+        const stages = [
+            { percent: 20, status: 'Carregando recursos...' },
+            { percent: 40, status: 'Inicializando módulos...' },
+            { percent: 60, status: 'Configurando interface...' },
+            { percent: 80, status: 'Preparando sistema...' },
+            { percent: 100, status: 'Pronto!' }
+        ];
+        
+        function updateLoadProgress(percent, status) {
+            const bar = document.getElementById('loadProgress');
+            const statusText = document.getElementById('loadStatus');
+            if (bar) bar.style.width = percent + '%';
+            if (statusText) statusText.textContent = status;
         }
         
-        // Load saved theme on startup
-        (function() {
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            document.documentElement.setAttribute('data-theme', savedTheme);
-            
-            // Update icon after DOM is ready
-            document.addEventListener('DOMContentLoaded', function() {
-                const icon = document.querySelector('#themeToggle i');
-                if (icon) {
-                    icon.className = savedTheme === 'light' ? 'bi bi-moon-stars' : 'bi bi-sun-fill';
-                }
-            });
-        })();
+        // Simulate loading stages
+        let stageIndex = 0;
+        const progressInterval = setInterval(() => {
+            if (stageIndex < stages.length) {
+                const stage = stages[stageIndex];
+                updateLoadProgress(stage.percent, stage.status);
+                stageIndex++;
+            } else {
+                clearInterval(progressInterval);
+            }
+        }, 300);
         
         // Global Error Handler
         window.addEventListener('error', function(e) {
             console.error('Global error:', e.error);
             
             // Show error modal if severe
-            if (e.error && e.error.message) {
+            if (e.error && e.error.message && !e.error.message.includes('script')) {
                 const errorModal = document.getElementById('errorModal');
                 const errorBody = document.getElementById('errorModalBody');
                 
                 if (errorModal && errorBody) {
-                    errorBody.textContent = e.error.message;
+                    errorBody.textContent = `Erro: ${e.error.message}`;
                     const modal = new bootstrap.Modal(errorModal);
                     modal.show();
                 }
             }
         });
         
+        // Unhandled Promise Rejection Handler
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error('Unhandled promise rejection:', e.reason);
+        });
+        
         // Hide loader when page is fully loaded
         window.addEventListener('load', function() {
             setTimeout(function() {
-                const loader = document.getElementById('globalLoader');
-                const mainContent = document.getElementById('mainContent');
+                clearInterval(progressInterval);
+                updateLoadProgress(100, 'Sistema carregado!');
                 
-                if (loader) {
-                    loader.classList.add('hidden');
-                    setTimeout(function() {
-                        loader.style.display = 'none';
-                    }, 300);
-                }
-                
-                if (mainContent) {
-                    mainContent.classList.add('loaded');
-                }
+                setTimeout(function() {
+                    const loader = document.getElementById('globalLoader');
+                    const mainContent = document.getElementById('mainContent');
+                    
+                    if (loader) {
+                        loader.classList.add('hidden');
+                        setTimeout(function() {
+                            loader.style.display = 'none';
+                        }, 300);
+                    }
+                    
+                    if (mainContent) {
+                        mainContent.classList.add('loaded');
+                    }
+                    
+                    // Show breadcrumb
+                    const breadcrumb = document.getElementById('breadcrumb');
+                    if (breadcrumb) {
+                        breadcrumb.style.display = 'block';
+                    }
+                }, 300);
             }, 500);
         });
         
         // Update active nav item
         function updateActiveNav(view) {
-            document.querySelectorAll('.nav-link').forEach(link => {
+            document.querySelectorAll('.nav-link[data-view]').forEach(link => {
                 link.classList.remove('active');
+                link.removeAttribute('aria-current');
                 if (link.dataset.view === view) {
                     link.classList.add('active');
+                    link.setAttribute('aria-current', 'page');
                 }
             });
+            
+            // Update breadcrumb
+            const currentPage = document.getElementById('currentPage');
+            if (currentPage) {
+                const viewNames = {
+                    dashboard: 'Dashboard',
+                    pdv: 'PDV',
+                    estoque: 'Estoque',
+                    clientes: 'Clientes',
+                    fidelidade: 'Fidelidade',
+                    relatorios: 'Relatórios'
+                };
+                currentPage.textContent = viewNames[view] || view;
+            }
         }
         
-        // Keyboard shortcuts info
+        // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
+            // Command Palette (Ctrl+K or Cmd+K)
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                window.commands?.show();
+                return;
+            }
+            
+            // View shortcuts with Ctrl
+            if (e.ctrlKey && !e.shiftKey && !e.altKey) {
+                let viewToSwitch = null;
+                
+                switch(e.key.toLowerCase()) {
+                    case 'd':
+                        e.preventDefault();
+                        viewToSwitch = 'dashboard';
+                        break;
+                    case 'p':
+                        e.preventDefault();
+                        viewToSwitch = 'pdv';
+                        break;
+                    case 'e':
+                        e.preventDefault();
+                        viewToSwitch = 'estoque';
+                        break;
+                    case 'c':
+                        e.preventDefault();
+                        viewToSwitch = 'clientes';
+                        break;
+                    case 'f':
+                        e.preventDefault();
+                        viewToSwitch = 'fidelidade';
+                        break;
+                    case 'r':
+                        e.preventDefault();
+                        viewToSwitch = 'relatorios';
+                        break;
+                }
+                
+                if (viewToSwitch && window.app) {
+                    window.app.switchView(viewToSwitch);
+                }
+            }
+            
+            // Show keyboard shortcuts (Ctrl+Shift+/)
             if (e.ctrlKey && e.shiftKey && e.key === '?') {
+                e.preventDefault();
                 if (window.utils && window.utils.showAlert) {
                     window.utils.showAlert(
                         'Atalhos de Teclado',
                         'info',
-                        'Ctrl+D: Dashboard\nCtrl+P: PDV\nCtrl+E: Estoque\nCtrl+C: Clientes\nCtrl+R: Relatórios\nCtrl+F: Fidelidade'
+                        `
+                        <div class="text-start">
+                            <p><strong>Navegação:</strong></p>
+                            <ul>
+                                <li><kbd>Ctrl</kbd> + <kbd>D</kbd>: Dashboard</li>
+                                <li><kbd>Ctrl</kbd> + <kbd>P</kbd>: PDV</li>
+                                <li><kbd>Ctrl</kbd> + <kbd>E</kbd>: Estoque</li>
+                                <li><kbd>Ctrl</kbd> + <kbd>C</kbd>: Clientes</li>
+                                <li><kbd>Ctrl</kbd> + <kbd>F</kbd>: Fidelidade</li>
+                                <li><kbd>Ctrl</kbd> + <kbd>R</kbd>: Relatórios</li>
+                            </ul>
+                            <p><strong>Ações:</strong></p>
+                            <ul>
+                                <li><kbd>Ctrl</kbd> + <kbd>K</kbd>: Paleta de Comandos</li>
+                                <li><kbd>Esc</kbd>: Fechar modal/dropdown</li>
+                            </ul>
+                        </div>
+                        `
                     );
                 }
+            }
+            
+            // Escape to close modals/dropdowns
+            if (e.key === 'Escape') {
+                // Close all open modals
+                document.querySelectorAll('.modal.show').forEach(modal => {
+                    const instance = bootstrap.Modal.getInstance(modal);
+                    if (instance) instance.hide();
+                });
+                
+                // Close all open dropdowns
+                document.querySelectorAll('.dropdown-menu.show').forEach(dropdown => {
+                    const toggle = dropdown.previousElementSibling;
+                    if (toggle) bootstrap.Dropdown.getInstance(toggle)?.hide();
+                });
+            }
+        });
+        
+        // Online/Offline detection
+        window.addEventListener('online', function() {
+            const indicator = document.getElementById('offlineIndicator');
+            if (indicator) indicator.style.display = 'none';
+            if (window.utils) {
+                window.utils.showToast('Conexão restaurada', 'success');
+            }
+        });
+        
+        window.addEventListener('offline', function() {
+            const indicator = document.getElementById('offlineIndicator');
+            if (indicator) indicator.style.display = 'block';
+            if (window.utils) {
+                window.utils.showToast('Você está offline', 'warning');
             }
         });
         
         // Service Worker registration (PWA)
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
-                // Descomentar quando tiver service-worker.js
-                // navigator.serviceWorker.register('/service-worker.js')
-                //     .then(reg => console.log('Service Worker registered'))
-                //     .catch(err => console.log('Service Worker registration failed'));
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(reg => {
+                        console.log('✅ Service Worker registered:', reg.scope);
+                        
+                        // Check for updates
+                        reg.addEventListener('updatefound', () => {
+                            const newWorker = reg.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // New version available
+                                    if (window.utils) {
+                                        window.utils.showToast('Nova versão disponível! Recarregue a página.', 'info');
+                                    }
+                                }
+                            });
+                        });
+                    })
+                    .catch(err => console.log('❌ Service Worker registration failed:', err));
+            });
+        }
+        
+        // Detect if running as PWA
+        const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
+                      window.navigator.standalone === true;
+        
+        if (isPWA) {
+            console.log('🚀 Running as PWA');
+            document.documentElement.classList.add('pwa-mode');
+        }
+        
+        // Performance monitoring
+        if (window.performance && window.performance.timing) {
+            window.addEventListener('load', function() {
+                setTimeout(function() {
+                    const perfData = window.performance.timing;
+                    const pageLoadTime = perfData.loadEventEnd - perfData.navigationStart;
+                    const connectTime = perfData.responseEnd - perfData.requestStart;
+                    
+                    console.log('📊 Performance Metrics:');
+                    console.log(`Page Load Time: ${pageLoadTime}ms`);
+                    console.log(`Server Response Time: ${connectTime}ms`);
+                    
+                    // Send to analytics if needed
+                    // analytics.track('page_load', { time: pageLoadTime });
+                }, 0);
             });
         }
     </script>
-    
-    <!-- Analytics (opcional) -->
-    <!-- 
-    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-XXXXXXXX-X"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', 'UA-XXXXXXXX-X');
-    </script>
-    -->
 </body>
 </html>
