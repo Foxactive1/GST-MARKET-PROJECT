@@ -1,10 +1,41 @@
 /**
  * Módulo de Clientes
  * Responsável pela gestão de clientes, fidelidade e relacionamento
+ * Versão revisada com integração aos utils aprimorados e verificação de dependências
  */
 
 window.clientes = (function() {
+    'use strict';
+
+    // ========================================
+    // VERIFICAÇÃO DE DEPENDÊNCIAS
+    // ========================================
+    function checkDependencies() {
+        if (!window.state) {
+            console.error('Erro no módulo Clientes: window.state não definido');
+            return false;
+        }
+        if (!window.utils) {
+            console.error('Erro no módulo Clientes: window.utils não definido');
+            return false;
+        }
+        return true;
+    }
+
+    // ========================================
+    // RENDERIZAÇÃO PRINCIPAL
+    // ========================================
     function render() {
+        if (!checkDependencies()) {
+            document.getElementById('mainContent').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Erro ao carregar módulo Clientes. Dependências não encontradas.
+                </div>
+            `;
+            return;
+        }
+
         const container = document.getElementById('mainContent');
         const state = window.state.get();
         
@@ -107,6 +138,9 @@ window.clientes = (function() {
         `;
     }
     
+    // ========================================
+    // RENDERIZAÇÃO DOS CARDS
+    // ========================================
     function renderClientCards(clients) {
         if (clients.length === 0) {
             return `
@@ -122,9 +156,11 @@ window.clientes = (function() {
             `;
         }
         
+        const sales = window.state.getSales();
+        
         return clients.map(c => {
-            const totalSpent = calculateClientSpent(c.id, window.state.getSales());
-            const lastPurchase = getLastPurchaseDate(c.id, window.state.getSales());
+            const totalSpent = calculateClientSpent(c.id, sales);
+            const lastPurchase = getLastPurchaseDate(c.id, sales);
             const isVip = (c.points || 0) >= 100;
             
             return `
@@ -199,6 +235,20 @@ window.clientes = (function() {
         }).join('');
     }
     
+    // ========================================
+    // FUNÇÕES AUXILIARES DE RENDERIZAÇÃO
+    // ========================================
+    function getInitials(name) {
+        return name.split(' ')
+            .map(n => n[0])
+            .join('')
+            .toUpperCase()
+            .substr(0, 2);
+    }
+    
+    // ========================================
+    // FILTRAGEM DE CLIENTES
+    // ========================================
     function filterClients(clients) {
         const search = document.getElementById('clientes-search')?.value?.toLowerCase() || '';
         const filtro = document.getElementById('clientes-filtro')?.value || 'all';
@@ -218,6 +268,8 @@ window.clientes = (function() {
         
         // Filtros especiais
         const now = new Date();
+        const sales = window.state.getSales();
+        
         switch(filtro) {
             case 'vip':
                 filtered = filtered.filter(c => (c.points || 0) >= 100);
@@ -234,7 +286,7 @@ window.clientes = (function() {
                 break;
             case 'inactive':
                 filtered = filtered.filter(c => {
-                    const lastPurchase = getLastPurchaseDateObj(c.id, window.state.getSales());
+                    const lastPurchase = getLastPurchaseDateObj(c.id, sales);
                     if (!lastPurchase) return true;
                     const days = (now - lastPurchase) / (1000 * 60 * 60 * 24);
                     return days >= 90;
@@ -245,14 +297,9 @@ window.clientes = (function() {
         return filtered;
     }
     
-    function getInitials(name) {
-        return name.split(' ')
-            .map(n => n[0])
-            .join('')
-            .toUpperCase()
-            .substr(0, 2);
-    }
-    
+    // ========================================
+    // CÁLCULOS AUXILIARES
+    // ========================================
     function calculateClientSpent(clientId, sales) {
         return sales
             .filter(s => s.clientId === clientId)
@@ -304,8 +351,12 @@ window.clientes = (function() {
         }).length;
     }
     
-    // Ações
+    // ========================================
+    // AÇÕES
+    // ========================================
     function viewHistory(clientId) {
+        if (!checkDependencies()) return;
+        
         const client = window.state.getClients().find(c => c.id === clientId);
         if (!client) return;
         
@@ -361,6 +412,8 @@ window.clientes = (function() {
     }
     
     function addPoints(clientId) {
+        if (!checkDependencies()) return;
+        
         const client = window.state.getClients().find(c => c.id === clientId);
         if (!client) return;
         
@@ -405,8 +458,12 @@ window.clientes = (function() {
             }
         }).then((result) => {
             if (result.isConfirmed) {
-                client.points = (client.points || 0) + result.value.points;
-                window.state.updateClient(client.id, client);
+                // Imutabilidade: cria novo objeto com pontos atualizados
+                const updatedClient = { 
+                    ...client, 
+                    points: (client.points || 0) + result.value.points 
+                };
+                window.state.updateClient(client.id, updatedClient);
                 
                 window.utils.showToast(`${result.value.points} pontos adicionados para ${client.nome}`, 'success');
                 window.clientes.render();
@@ -415,6 +472,8 @@ window.clientes = (function() {
     }
     
     function deleteClient(id) {
+        if (!checkDependencies()) return;
+        
         window.utils.showConfirm(
             'Remover cliente?',
             'Esta ação não poderá ser desfeita. O histórico de compras será mantido, mas o cliente será desvinculado.'
@@ -428,6 +487,8 @@ window.clientes = (function() {
     }
     
     function showRanking() {
+        if (!checkDependencies()) return;
+        
         const clients = window.state.getClients()
             .sort((a, b) => (b.points || 0) - (a.points || 0))
             .slice(0, 10);
@@ -470,6 +531,8 @@ window.clientes = (function() {
     }
     
     function sendPromotion() {
+        if (!checkDependencies()) return;
+        
         const clients = window.state.getClients();
         
         Swal.fire({
@@ -511,6 +574,8 @@ window.clientes = (function() {
     }
     
     function exportClients() {
+        if (!checkDependencies()) return;
+        
         const clients = window.state.getClients();
         const sales = window.state.getSales();
         
@@ -521,7 +586,7 @@ window.clientes = (function() {
             'Telefone': c.fone,
             'Email': c.email || '',
             'Pontos': c.points || 0,
-            'Total Gasto': calculateClientSpent(c.id, sales),
+            'Total Gasto': window.utils.formatCurrency(calculateClientSpent(c.id, sales)),
             'Compras': sales.filter(s => s.clientId === c.id).length,
             'Data Cadastro': window.utils.formatDate(c.createdAt || new Date())
         }));
@@ -530,7 +595,9 @@ window.clientes = (function() {
         window.utils.showToast('Clientes exportados com sucesso!', 'success');
     }
     
-    // API Pública
+    // ========================================
+    // API PÚBLICA
+    // ========================================
     return {
         render,
         filter: () => {
@@ -549,7 +616,7 @@ window.clientes = (function() {
     };
 })();
 
-// Adiciona estilo para avatar
+// Adiciona estilo para avatar (mantido como estava)
 const style = document.createElement('style');
 style.textContent = `
     .avatar-circle {

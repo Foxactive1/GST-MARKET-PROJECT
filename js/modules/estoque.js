@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * MÓDULO DE GESTÃO DE ESTOQUE - VERSÃO MELHORADA
+ * MÓDULO DE GESTÃO DE ESTOQUE - VERSÃO REVISADA 2.1.0
  * ============================================================================
  * 
  * Responsável por:
@@ -12,13 +12,34 @@
  * - Análise de giro de estoque
  * - Relatórios e dashboards
  * 
+ * Melhorias v2.1.0:
+ * - Integração com utils aprimorados (formatCurrency, parseMonetaryValue, máscaras)
+ * - Uso correto dos métodos de atualização do state (imutabilidade)
+ * - Verificação de dependências no início
+ * - Máscaras de moeda nos inputs
+ * 
  * @author Dione Castro Alves - InNovaIdeia
- * @version 2.0.0
+ * @version 2.1.0
  * @date 2026
  */
 
 window.estoque = (function() {
     'use strict';
+    
+    // ========================================
+    // VERIFICAÇÃO DE DEPENDÊNCIAS
+    // ========================================
+    function checkDependencies() {
+        if (!window.state) {
+            console.error('Erro no módulo Estoque: window.state não definido');
+            return false;
+        }
+        if (!window.utils) {
+            console.error('Erro no módulo Estoque: window.utils não definido');
+            return false;
+        }
+        return true;
+    }
     
     // ========================================
     // ESTADO E CONFIGURAÇÕES
@@ -46,6 +67,7 @@ window.estoque = (function() {
     // ========================================
     
     function init() {
+        if (!checkDependencies()) return;
         // Inicia verificação automática de alertas
         startAlertMonitoring();
         
@@ -58,6 +80,16 @@ window.estoque = (function() {
     // ========================================
     
     function render() {
+        if (!checkDependencies()) {
+            document.getElementById('mainContent').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Erro ao carregar módulo Estoque. Dependências não encontradas.
+                </div>
+            `;
+            return;
+        }
+        
         const container = document.getElementById('mainContent');
         const state = window.state.get();
         
@@ -817,6 +849,8 @@ window.estoque = (function() {
     // ========================================
     
     function adjustStock(productId) {
+        if (!checkDependencies()) return;
+        
         const product = window.state.getProducts().find(p => p.id === productId);
         if (!product) {
             window.utils.showToast('Produto não encontrado', 'error');
@@ -987,9 +1021,9 @@ window.estoque = (function() {
                 break;
         }
         
-        // Atualiza produto
-        product.qtd = newQty;
-        window.state.updateProduct(product.id, product);
+        // Atualiza produto (imutabilidade)
+        const updatedProduct = { ...product, qtd: newQty };
+        window.state.updateProduct(product.id, updatedProduct);
         
         // Registra movimentação no histórico
         recordMovement({
@@ -1071,6 +1105,8 @@ window.estoque = (function() {
     }
     
     function viewHistory(productId) {
+        if (!checkDependencies()) return;
+        
         const product = window.state.getProducts().find(p => p.id === productId);
         if (!product) {
             window.utils.showToast('Produto não encontrado', 'error');
@@ -1229,6 +1265,8 @@ window.estoque = (function() {
     }
     
     function viewMovementHistory() {
+        if (!checkDependencies()) return;
+        
         const movements = getMovementHistory();
         
         if (movements.length === 0) {
@@ -1413,6 +1451,8 @@ window.estoque = (function() {
     // ========================================
     
     function importProducts() {
+        if (!checkDependencies()) return;
+        
         Swal.fire({
             title: '<i class="bi bi-upload"></i> Importar Produtos',
             html: `
@@ -1421,6 +1461,7 @@ window.estoque = (function() {
                         <i class="bi bi-info-circle"></i>
                         <strong>Formato esperado (CSV):</strong>
                         <pre class="mb-0 mt-2 small">nome,codigo,categoria,quantidade,preco,minimo,unidade</pre>
+                        <small>Use ponto como separador decimal (ex: 10.50)</small>
                     </div>
                     
                     <div class="mb-3">
@@ -1573,6 +1614,8 @@ window.estoque = (function() {
     }
     
     function exportInventory() {
+        if (!checkDependencies()) return;
+        
         const products = window.state.getProducts();
         
         if (products.length === 0) {
@@ -1586,12 +1629,12 @@ window.estoque = (function() {
             'Categoria': p.categoria || '',
             'Quantidade': p.qtd,
             'Unidade': p.unit || 'UN',
-            'Preço': p.preco.toFixed(2),
-            'Custo': (p.cost || 0).toFixed(2),
+            'Preço': window.utils.formatCurrency(p.preco),
+            'Custo': p.cost ? window.utils.formatCurrency(p.cost) : '0,00',
             'Estoque Mínimo': p.minStock || 5,
-            'Valor em Estoque': ((p.cost || p.preco) * p.qtd).toFixed(2),
+            'Valor em Estoque': window.utils.formatCurrency((p.cost || p.preco) * p.qtd),
             'Vendidos': p.sold || 0,
-            'Receita Total': ((p.sold || 0) * p.preco).toFixed(2),
+            'Receita Total': window.utils.formatCurrency((p.sold || 0) * p.preco),
             'Status': getStockStatus(p).text
         }));
         
@@ -1625,7 +1668,7 @@ window.estoque = (function() {
                     'Estoque Anterior': '-',
                     'Estoque Novo': '-',
                     'Motivo': `Venda - ${s.payment}`,
-                    'Valor': (item.preco * item.qty).toFixed(2)
+                    'Valor': window.utils.formatCurrency(item.preco * item.qty)
                 };
             })
         ].sort((a, b) => new Date(b.Data) - new Date(a.Data));
@@ -1665,6 +1708,8 @@ window.estoque = (function() {
     // ========================================
     
     function generateBarcode(productId) {
+        if (!checkDependencies()) return;
+        
         const product = window.state.getProducts().find(p => p.id === productId);
         if (!product) return;
         
@@ -1725,6 +1770,8 @@ ${barcodeArt}
     }
     
     function generateBarcodes() {
+        if (!checkDependencies()) return;
+        
         const products = window.state.getProducts().filter(p => p.code);
         
         if (products.length === 0) {
@@ -1822,6 +1869,8 @@ ${barcodeArt}
     // ========================================
     
     function generateReplenishmentOrder() {
+        if (!checkDependencies()) return;
+        
         const products = window.state.getProducts();
         const toReplenish = products.filter(p => p.qtd <= (p.minStock || 5));
         
@@ -1907,8 +1956,8 @@ ${barcodeArt}
                 'Estoque Mínimo': minStock,
                 'Quantidade Sugerida': suggested,
                 'Unidade': p.unit || 'UN',
-                'Valor Unitário': p.cost || p.preco,
-                'Valor Total': ((p.cost || p.preco) * suggested).toFixed(2)
+                'Valor Unitário': p.cost ? window.utils.formatCurrency(p.cost) : window.utils.formatCurrency(p.preco),
+                'Valor Total': window.utils.formatCurrency((p.cost || p.preco) * suggested)
             };
         });
         
@@ -1921,6 +1970,8 @@ ${barcodeArt}
     }
     
     function printInventory() {
+        if (!checkDependencies()) return;
+        
         const products = filterProducts(window.state.getProducts());
         
         const printWindow = window.open('', '_blank');
@@ -1986,15 +2037,15 @@ ${barcodeArt}
                                     <td>${p.nome}</td>
                                     <td>${p.categoria || '-'}</td>
                                     <td class="text-right">${p.qtd} ${p.unit || 'un'}</td>
-                                    <td class="text-right">R$ ${p.preco.toFixed(2)}</td>
-                                    <td class="text-right">R$ ${(p.preco * p.qtd).toFixed(2)}</td>
+                                    <td class="text-right">R$ ${window.utils.formatCurrency(p.preco)}</td>
+                                    <td class="text-right">R$ ${window.utils.formatCurrency(p.preco * p.qtd)}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
                         <tfoot>
                             <tr>
                                 <td colspan="5"><strong>TOTAL</strong></td>
-                                <td class="text-right"><strong>R$ ${calculateInventoryValue(products).toFixed(2)}</strong></td>
+                                <td class="text-right"><strong>R$ ${window.utils.formatCurrency(calculateInventoryValue(products))}</strong></td>
                             </tr>
                         </tfoot>
                     </table>
@@ -2010,6 +2061,8 @@ ${barcodeArt}
     }
     
     function deleteProduct(id) {
+        if (!checkDependencies()) return;
+        
         const product = window.state.getProducts().find(p => p.id === id);
         if (!product) return;
         
@@ -2170,7 +2223,7 @@ ${barcodeArt}
     }
     
     // Debounced filter para melhor performance
-    const filterDebounced = window.utils?.debounce(filter, 300) || filter;
+    const filterDebounced = window.utils.debounce(filter, 300);
     
     function sort(field) {
         if (currentSort === field) {

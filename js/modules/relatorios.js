@@ -1,13 +1,44 @@
 /**
  * Módulo de Relatórios
  * Responsável por análises, gráficos e exportação de dados
+ * Versão revisada com integração aos utils aprimorados e verificação de dependências
  */
 
 window.relatorios = (function() {
+    'use strict';
+
+    // ========================================
+    // VERIFICAÇÃO DE DEPENDÊNCIAS
+    // ========================================
+    function checkDependencies() {
+        if (!window.state) {
+            console.error('Erro no módulo Relatórios: window.state não definido');
+            return false;
+        }
+        if (!window.utils) {
+            console.error('Erro no módulo Relatórios: window.utils não definido');
+            return false;
+        }
+        return true;
+    }
+
     let currentPeriod = 'month';
     let charts = {};
     
+    // ========================================
+    // RENDERIZAÇÃO PRINCIPAL
+    // ========================================
     function render() {
+        if (!checkDependencies()) {
+            document.getElementById('mainContent').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Erro ao carregar módulo Relatórios. Dependências não encontradas.
+                </div>
+            `;
+            return;
+        }
+
         const container = document.getElementById('mainContent');
         
         container.innerHTML = `
@@ -165,6 +196,9 @@ window.relatorios = (function() {
         }, 100);
     }
     
+    // ========================================
+    // RENDERIZAÇÃO DE COMPONENTES
+    // ========================================
     function renderKPIs() {
         const state = window.state.get();
         const filteredSales = filterSalesByPeriod(state.sales, currentPeriod);
@@ -359,6 +393,9 @@ window.relatorios = (function() {
         }).join('');
     }
     
+    // ========================================
+    // FILTRAGEM POR PERÍODO
+    // ========================================
     function filterSalesByPeriod(sales, period) {
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -388,6 +425,9 @@ window.relatorios = (function() {
         }
     }
     
+    // ========================================
+    // GRÁFICOS
+    // ========================================
     function initSalesTrendChart() {
         const ctx = document.getElementById('salesTrendChart')?.getContext('2d');
         if (!ctx) return;
@@ -444,7 +484,7 @@ window.relatorios = (function() {
                     y: {
                         beginAtZero: true,
                         ticks: {
-                            callback: value => 'R$ ' + value.toFixed(2)
+                            callback: value => 'R$ ' + window.utils.formatCurrency(value)
                         }
                     }
                 }
@@ -498,13 +538,17 @@ window.relatorios = (function() {
         });
     }
     
-    // Ações
+    // ========================================
+    // AÇÕES
+    // ========================================
     function changePeriod(period) {
         currentPeriod = period;
         refresh();
     }
     
     function refresh() {
+        if (!checkDependencies()) return;
+        
         // Atualiza KPIs
         const kpisDiv = document.getElementById('report-kpis');
         if (kpisDiv) kpisDiv.innerHTML = renderKPIs();
@@ -527,6 +571,8 @@ window.relatorios = (function() {
     }
     
     function viewSaleDetails(saleId) {
+        if (!checkDependencies()) return;
+        
         const state = window.state.get();
         const sale = state.sales.find(s => s.id === saleId);
         if (!sale) return;
@@ -606,6 +652,8 @@ window.relatorios = (function() {
     }
     
     function exportFullReport() {
+        if (!checkDependencies()) return;
+        
         const format = document.getElementById('report-format')?.value || 'pdf';
         const period = document.getElementById('report-period')?.value || 'month';
         
@@ -621,6 +669,8 @@ window.relatorios = (function() {
     }
     
     function exportSales() {
+        if (!checkDependencies()) return;
+        
         const state = window.state.get();
         const filteredSales = filterSalesByPeriod(state.sales, currentPeriod);
         
@@ -636,7 +686,7 @@ window.relatorios = (function() {
                 'Itens': sale.items.length,
                 'Unidades': sale.items.reduce((sum, i) => sum + i.qty, 0),
                 'Pagamento': sale.payment,
-                'Total': sale.total
+                'Total': window.utils.formatCurrency(sale.total)
             };
         });
         
@@ -644,7 +694,9 @@ window.relatorios = (function() {
         window.utils.showToast('Vendas exportadas com sucesso!', 'success');
     }
     
-    // API Pública
+    // ========================================
+    // API PÚBLICA
+    // ========================================
     return {
         render,
         refresh,

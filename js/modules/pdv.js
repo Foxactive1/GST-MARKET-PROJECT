@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * MÓDULO PDV (PONTO DE VENDA) - VERSÃO MELHORADA
+ * MÓDULO PDV (PONTO DE VENDA) - VERSÃO REVISADA 2.2.0
  * ============================================================================
  * 
  * Responsável por:
@@ -16,13 +16,35 @@
  * - Relatórios de caixa
  * - Produtos favoritos
  * 
+ * Melhorias v2.2.0:
+ * - Integração com utils aprimorados (parseMonetaryValue, formatCurrency, máscaras)
+ * - Uso correto dos métodos de atualização do state (imutabilidade)
+ * - Verificação de dependências no início
+ * - Parsing consistente de valores monetários em todos os inputs
+ * - Máscaras de moeda nos campos de entrada
+ * 
  * @author Dione Castro Alves - InNovaIdeia
- * @version 2.0.0
+ * @version 2.2.0
  * @date 2026
  */
 
 window.pdv = (function() {
     'use strict';
+    
+    // ========================================
+    // VERIFICAÇÃO DE DEPENDÊNCIAS
+    // ========================================
+    function checkDependencies() {
+        if (!window.state) {
+            console.error('Erro no módulo PDV: window.state não definido');
+            return false;
+        }
+        if (!window.utils) {
+            console.error('Erro no módulo PDV: window.utils não definido');
+            return false;
+        }
+        return true;
+    }
     
     // ========================================
     // ESTADO DO PDV
@@ -76,6 +98,7 @@ window.pdv = (function() {
     // ========================================
     
     function init() {
+        if (!checkDependencies()) return;
         loadCashierSession();
         loadSuspendedSales();
         loadFavoriteProducts();
@@ -131,6 +154,16 @@ window.pdv = (function() {
     // ========================================
     
     function render() {
+        if (!checkDependencies()) {
+            document.getElementById('mainContent').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Erro ao carregar módulo PDV. Dependências não encontradas.
+                </div>
+            `;
+            return;
+        }
+        
         const container = document.getElementById('mainContent');
         const state = window.state.get();
         
@@ -596,8 +629,9 @@ window.pdv = (function() {
         // Calcula pontos que o cliente vai ganhar
         let pointsToEarn = 0;
         if (selectedClient) {
-            const fidelityRate = window.state.getFidelity().rate || 1;
-            pointsToEarn = Math.floor(total / fidelityRate);
+            const fidelity = window.state.getFidelity?.() || { rate: 1 };
+            const rate = fidelity.rate || 1;
+            pointsToEarn = Math.floor(total / rate);
         }
         
         return `
@@ -675,6 +709,8 @@ window.pdv = (function() {
     // ========================================
     
     function addToCart(productId) {
+        if (!checkDependencies()) return;
+        
         if (!cashierSession || !cashierSession.isOpen) {
             window.utils.showAlert(
                 'Caixa Fechado',
@@ -852,12 +888,11 @@ window.pdv = (function() {
                     
                     <div class="mb-3">
                         <label class="form-label">Valor do desconto</label>
-                        <input type="number" 
+                        <input type="text" 
                                id="discount-amount" 
                                class="form-control" 
-                               min="0" 
-                               step="0.01"
-                               placeholder="0.00">
+                               placeholder="0,00"
+                               oninput="this.value = window.utils.maskCurrencyInput(this.value)">
                     </div>
                     
                     <div id="discount-preview" class="alert alert-secondary d-none">
@@ -877,7 +912,8 @@ window.pdv = (function() {
                 
                 function updatePreview() {
                     const type = typeSelect.value;
-                    const amount = parseFloat(amountInput.value) || 0;
+                    const amountStr = amountInput.value;
+                    const amount = window.utils.parseMonetaryValue(amountStr);
                     
                     if (amount > 0) {
                         let discountValue = 0;
@@ -913,7 +949,8 @@ window.pdv = (function() {
             },
             preConfirm: () => {
                 const type = document.getElementById('discount-type').value;
-                const amount = parseFloat(document.getElementById('discount-amount').value);
+                const amountStr = document.getElementById('discount-amount').value;
+                const amount = window.utils.parseMonetaryValue(amountStr);
                 
                 if (isNaN(amount) || amount <= 0) {
                     Swal.showValidationMessage('Informe um valor válido');
@@ -1078,6 +1115,8 @@ window.pdv = (function() {
     // ========================================
     
     function openCheckout() {
+        if (!checkDependencies()) return;
+        
         if (!cashierSession || !cashierSession.isOpen) {
             window.utils.showAlert(
                 'Caixa Fechado',
@@ -1098,94 +1137,13 @@ window.pdv = (function() {
         
         Swal.fire({
             title: '<i class="bi bi-cash-coin"></i> Finalizar Venda',
-            html: `
-                <div class="text-start">
-                    <!-- Resumo da venda -->
-                    <div class="alert alert-primary mb-3">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span>Total da venda:</span>
-                            <strong class="h4 mb-0">R$ ${window.utils.formatCurrency(total)}</strong>
-                        </div>
-                        <small class="text-muted">${cart.length} ${cart.length === 1 ? 'item' : 'itens'}</small>
-                    </div>
-                    
-                    <!-- Forma de pagamento -->
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Forma de Pagamento *</label>
-                        <select id="payment-method" class="form-select">
-                            <option value="">Selecione...</option>
-                            <option value="dinheiro">💵 Dinheiro</option>
-                            <option value="debito">💳 Cartão de Débito</option>
-                            <option value="credito">💳 Cartão de Crédito</option>
-                            <option value="pix">📱 PIX</option>
-                            <option value="vale">🎫 Vale/Voucher</option>
-                            <option value="multiplo">🔀 Múltiplas formas</option>
-                        </select>
-                    </div>
-                    
-                    <!-- Campo de dinheiro (oculto inicialmente) -->
-                    <div id="cash-field" style="display: none;">
-                        <div class="mb-3">
-                            <label class="form-label">Valor Recebido (R$)</label>
-                            <input type="number" 
-                                   id="amount-paid" 
-                                   class="form-control form-control-lg" 
-                                   min="${total}" 
-                                   step="0.01"
-                                   placeholder="0.00">
-                        </div>
-                        
-                        <div id="change-field" style="display: none;">
-                            <div class="alert alert-success">
-                                <div class="d-flex justify-content-between">
-                                    <strong>Troco:</strong>
-                                    <input type="text" 
-                                           id="change-amount" 
-                                           class="form-control-plaintext fw-bold text-end" 
-                                           readonly>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Campo de múltiplos pagamentos -->
-                    <div id="multiple-payment-field" style="display: none;">
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle"></i>
-                            Configure os pagamentos clicando em "Configurar"
-                        </div>
-                    </div>
-                    
-                    <!-- Cliente -->
-                    ${client ? `
-                        <div class="alert alert-success">
-                            <i class="bi bi-person-check"></i>
-                            Cliente: <strong>${client.nome}</strong><br>
-                            Pontos atuais: ${client.points || 0}<br>
-                            Vai ganhar: <strong>${Math.floor(total / (window.state.getFidelity().rate || 1))} pontos</strong>
-                        </div>
-                    ` : ''}
-                    
-                    <!-- Observações -->
-                    <div class="mb-3">
-                        <label class="form-label">Observações (opcional)</label>
-                        <textarea id="sale-notes" 
-                                  class="form-control" 
-                                  rows="2"
-                                  placeholder="Ex: Cliente pediu nota fiscal..."></textarea>
-                    </div>
-                </div>
-            `,
+            html: generateCheckoutHTML(total, client),
             width: '600px',
             showCancelButton: true,
             confirmButtonText: '<i class="bi bi-check-circle"></i> Confirmar Venda',
             cancelButtonText: 'Cancelar',
-            didOpen: () => {
-                setupCheckoutListeners(total);
-            },
-            preConfirm: () => {
-                return validateCheckout(total);
-            }
+            didOpen: () => setupCheckoutListeners(total),
+            preConfirm: () => validateCheckout(total)
         }).then((result) => {
             if (result.isConfirmed) {
                 finalizeSale(result.value);
@@ -1193,10 +1151,79 @@ window.pdv = (function() {
         });
     }
     
+    function generateCheckoutHTML(total, client) {
+        return `
+            <div class="text-start">
+                <div class="alert alert-primary mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>Total da venda:</span>
+                        <strong class="h4 mb-0">R$ ${window.utils.formatCurrency(total)}</strong>
+                    </div>
+                    <small class="text-muted">${cart.length} ${cart.length === 1 ? 'item' : 'itens'}</small>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Forma de Pagamento *</label>
+                    <select id="payment-method" class="form-select">
+                        <option value="">Selecione...</option>
+                        <option value="dinheiro">💵 Dinheiro</option>
+                        <option value="debito">💳 Cartão de Débito</option>
+                        <option value="credito">💳 Cartão de Crédito</option>
+                        <option value="pix">📱 PIX</option>
+                        <option value="vale">🎫 Vale/Voucher</option>
+                        <option value="multiplo">🔀 Múltiplas formas</option>
+                    </select>
+                </div>
+                
+                <div id="cash-field" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label">Valor Recebido (R$)</label>
+                        <input type="text" 
+                               id="amount-paid" 
+                               class="form-control form-control-lg" 
+                               placeholder="Ex: 50,00"
+                               oninput="this.value = window.utils.maskCurrencyInput(this.value)">
+                        <small class="text-muted">Digite o valor recebido</small>
+                    </div>
+                    
+                    <div id="change-field" style="display: none;">
+                        <div class="alert alert-success">
+                            <div class="d-flex justify-content-between">
+                                <strong>Troco:</strong>
+                                <span id="change-amount" class="fw-bold"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="multiple-payment-field" style="display: none;">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        Configure os pagamentos clicando em "Configurar"
+                    </div>
+                </div>
+                
+                ${client ? `
+                    <div class="alert alert-success">
+                        <i class="bi bi-person-check"></i>
+                        Cliente: <strong>${client.nome}</strong><br>
+                        Pontos atuais: ${client.points || 0}<br>
+                        Vai ganhar: <strong>${Math.floor(total / (window.state.getFidelity?.().rate || 1))} pontos</strong>
+                    </div>
+                ` : ''}
+                
+                <div class="mb-3">
+                    <label class="form-label">Observações (opcional)</label>
+                    <textarea id="sale-notes" class="form-control" rows="2" placeholder="Ex: Cliente pediu nota fiscal..."></textarea>
+                </div>
+            </div>
+        `;
+    }
+    
     function setupCheckoutListeners(total) {
         const paymentSelect = document.getElementById('payment-method');
-        const amountPaid = document.getElementById('amount-paid');
         const cashField = document.getElementById('cash-field');
+        const amountPaid = document.getElementById('amount-paid');
         const changeField = document.getElementById('change-field');
         const changeAmount = document.getElementById('change-amount');
         const multipleField = document.getElementById('multiple-payment-field');
@@ -1204,7 +1231,6 @@ window.pdv = (function() {
         paymentSelect.addEventListener('change', () => {
             const payment = paymentSelect.value;
             
-            // Esconde todos os campos
             cashField.style.display = 'none';
             multipleField.style.display = 'none';
             changeField.style.display = 'none';
@@ -1219,20 +1245,25 @@ window.pdv = (function() {
         
         if (amountPaid) {
             amountPaid.addEventListener('input', () => {
-                const paid = parseFloat(amountPaid.value) || 0;
-                const change = paid - total;
+                const paidStr = amountPaid.value;
+                const paid = window.utils.parseMonetaryValue(paidStr);
                 
-                if (change >= 0) {
-                    changeAmount.value = `R$ ${window.utils.formatCurrency(change)}`;
-                    changeField.style.display = 'block';
+                if (!isNaN(paid) && paid >= 0) {
+                    const change = paid - total;
                     
-                    // Alerta se troco muito alto
-                    if (change > CONFIG.minChangeAlert) {
-                        changeField.classList.add('alert-warning');
-                        changeField.classList.remove('alert-success');
+                    if (change >= 0) {
+                        changeAmount.textContent = `R$ ${window.utils.formatCurrency(change)}`;
+                        changeField.style.display = 'block';
+                        
+                        if (change > CONFIG.minChangeAlert) {
+                            changeField.classList.add('alert-warning');
+                            changeField.classList.remove('alert-success');
+                        } else {
+                            changeField.classList.add('alert-success');
+                            changeField.classList.remove('alert-warning');
+                        }
                     } else {
-                        changeField.classList.add('alert-success');
-                        changeField.classList.remove('alert-warning');
+                        changeField.style.display = 'none';
                     }
                 } else {
                     changeField.style.display = 'none';
@@ -1251,10 +1282,11 @@ window.pdv = (function() {
         }
         
         if (payment === 'dinheiro') {
-            const paid = parseFloat(document.getElementById('amount-paid').value);
+            const paidStr = document.getElementById('amount-paid').value;
+            const paid = window.utils.parseMonetaryValue(paidStr);
             
             if (isNaN(paid) || paid < total) {
-                Swal.showValidationMessage('Valor recebido insuficiente');
+                Swal.showValidationMessage('Valor recebido insuficiente ou inválido');
                 return false;
             }
             
@@ -1298,13 +1330,16 @@ window.pdv = (function() {
         // Adiciona venda ao estado
         window.state.addSale(sale);
         
-        // Atualiza estoque
+        // Atualiza estoque (usando métodos do state)
         cart.forEach(item => {
             const product = window.state.getProducts().find(p => p.id === item.id);
             if (product) {
-                product.qtd -= item.qty;
-                product.sold = (product.sold || 0) + item.qty;
-                window.state.updateProduct(product.id, product);
+                const updatedProduct = { 
+                    ...product, 
+                    qtd: product.qtd - item.qty,
+                    sold: (product.sold || 0) + item.qty 
+                };
+                window.state.updateProduct(product.id, updatedProduct);
             }
         });
         
@@ -1312,11 +1347,15 @@ window.pdv = (function() {
         if (selectedClient?.id) {
             const client = window.state.getClients().find(c => c.id === selectedClient.id);
             if (client) {
-                const rate = window.state.getFidelity().rate || 1;
+                const fidelity = window.state.getFidelity?.() || { rate: 1 };
+                const rate = fidelity.rate || 1;
                 const points = Math.floor(total / rate);
-                client.points = (client.points || 0) + points;
-                client.totalPurchases = (client.totalPurchases || 0) + total;
-                window.state.updateClient(client.id, client);
+                const updatedClient = { 
+                    ...client, 
+                    points: (client.points || 0) + points,
+                    totalPurchases: (client.totalPurchases || 0) + total 
+                };
+                window.state.updateClient(client.id, updatedClient);
                 
                 // Mensagem de pontos
                 setTimeout(() => {
@@ -1381,6 +1420,9 @@ window.pdv = (function() {
     }
     
     function generateReceiptHTML(sale, client) {
+        const fidelity = window.state.getFidelity?.() || { rate: 1 };
+        const rate = fidelity.rate || 1;
+        
         return `
             <div class="receipt" style="font-family: 'Courier New', monospace; text-align: center; max-width: 300px; margin: 0 auto;">
                 <div style="border-bottom: 2px dashed #000; padding-bottom: 10px; margin-bottom: 10px;">
@@ -1444,7 +1486,7 @@ window.pdv = (function() {
                         Troco: R$ ${window.utils.formatCurrency(sale.change || 0)}
                     ` : ''}
                     ${client ? `
-                        <br><strong>Pontos ganhos:</strong> ${Math.floor(sale.total / (window.state.getFidelity().rate || 1))}
+                        <br><strong>Pontos ganhos:</strong> ${Math.floor(sale.total / rate)}
                         <br><strong>Pontos totais:</strong> ${client.points || 0}
                     ` : ''}
                 </div>
@@ -1790,13 +1832,11 @@ window.pdv = (function() {
                     
                     <div class="mb-3">
                         <label class="form-label">Valor inicial no caixa (R$)</label>
-                        <input type="number" 
+                        <input type="text" 
                                id="cashier-initial-value" 
                                class="form-control" 
-                               min="0" 
-                               step="0.01"
-                               value="0"
-                               placeholder="0.00">
+                               placeholder="0,00"
+                               oninput="this.value = window.utils.maskCurrencyInput(this.value)">
                         <small class="text-muted">Informe o valor em dinheiro disponível</small>
                     </div>
                     
@@ -1813,11 +1853,17 @@ window.pdv = (function() {
             cancelButtonText: 'Cancelar',
             preConfirm: () => {
                 const operator = document.getElementById('cashier-operator').value.trim();
-                const initialValue = parseFloat(document.getElementById('cashier-initial-value').value) || 0;
+                const initialStr = document.getElementById('cashier-initial-value').value;
+                const initialValue = window.utils.parseMonetaryValue(initialStr);
                 const notes = document.getElementById('cashier-notes').value.trim();
                 
                 if (!operator) {
                     Swal.showValidationMessage('Informe o nome do operador');
+                    return false;
+                }
+                
+                if (isNaN(initialValue) || initialValue < 0) {
+                    Swal.showValidationMessage('Informe um valor inicial válido');
                     return false;
                 }
                 
@@ -1912,13 +1958,12 @@ window.pdv = (function() {
                     
                     <div class="mb-3">
                         <label class="form-label fw-bold">Valor real contado (R$) *</label>
-                        <input type="number" 
+                        <input type="text" 
                                id="actual-value" 
                                class="form-control form-control-lg" 
-                               min="0" 
-                               step="0.01"
-                               value="${expectedValue}"
-                               required>
+                               placeholder="${window.utils.formatCurrency(expectedValue)}"
+                               oninput="this.value = window.utils.maskCurrencyInput(this.value)"
+                               value="${window.utils.formatCurrency(expectedValue)}">
                     </div>
                     
                     <div id="difference-alert" class="alert d-none"></div>
@@ -1940,10 +1985,11 @@ window.pdv = (function() {
                 const diffAlert = document.getElementById('difference-alert');
                 
                 actualInput.addEventListener('input', () => {
-                    const actual = parseFloat(actualInput.value) || 0;
+                    const actualStr = actualInput.value;
+                    const actual = window.utils.parseMonetaryValue(actualStr);
                     const diff = actual - expectedValue;
                     
-                    if (Math.abs(diff) > 0.01) {
+                    if (!isNaN(actual) && Math.abs(diff) > 0.01) {
                         diffAlert.classList.remove('d-none');
                         
                         if (diff > 0) {
@@ -1963,7 +2009,8 @@ window.pdv = (function() {
                 });
             },
             preConfirm: () => {
-                const actualValue = parseFloat(document.getElementById('actual-value').value);
+                const actualStr = document.getElementById('actual-value').value;
+                const actualValue = window.utils.parseMonetaryValue(actualStr);
                 const notes = document.getElementById('closing-notes').value.trim();
                 
                 if (isNaN(actualValue) || actualValue < 0) {
@@ -2077,11 +2124,11 @@ window.pdv = (function() {
                     
                     <div class="mb-3">
                         <label class="form-label">Valor (R$) *</label>
-                        <input type="number" 
+                        <input type="text" 
                                id="withdrawal-amount" 
                                class="form-control form-control-lg" 
-                               min="0.01" 
-                               step="0.01"
+                               placeholder="0,00"
+                               oninput="this.value = window.utils.maskCurrencyInput(this.value)"
                                required>
                     </div>
                     
@@ -2108,7 +2155,8 @@ window.pdv = (function() {
             confirmButtonText: 'Registrar Sangria',
             cancelButtonText: 'Cancelar',
             preConfirm: () => {
-                const amount = parseFloat(document.getElementById('withdrawal-amount').value);
+                const amountStr = document.getElementById('withdrawal-amount').value;
+                const amount = window.utils.parseMonetaryValue(amountStr);
                 const reason = document.getElementById('withdrawal-reason').value;
                 const notes = document.getElementById('withdrawal-notes').value.trim();
                 
@@ -2161,11 +2209,11 @@ window.pdv = (function() {
                     
                     <div class="mb-3">
                         <label class="form-label">Valor (R$) *</label>
-                        <input type="number" 
+                        <input type="text" 
                                id="reinforcement-amount" 
                                class="form-control form-control-lg" 
-                               min="0.01" 
-                               step="0.01"
+                               placeholder="0,00"
+                               oninput="this.value = window.utils.maskCurrencyInput(this.value)"
                                required>
                     </div>
                     
@@ -2191,7 +2239,8 @@ window.pdv = (function() {
             confirmButtonText: 'Registrar Reforço',
             cancelButtonText: 'Cancelar',
             preConfirm: () => {
-                const amount = parseFloat(document.getElementById('reinforcement-amount').value);
+                const amountStr = document.getElementById('reinforcement-amount').value;
+                const amount = window.utils.parseMonetaryValue(amountStr);
                 const reason = document.getElementById('reinforcement-reason').value;
                 const notes = document.getElementById('reinforcement-notes').value.trim();
                 
@@ -2792,6 +2841,9 @@ window.pdv = (function() {
         registerReinforcement,
         showCashierReport,
         showFavorites,
-        CONFIG
+        CONFIG,
+        // Utilitários expostos (opcional)
+        parseMonetaryValue: window.utils.parseMonetaryValue,
+        formatCurrency: window.utils.formatCurrency
     };
 })();
