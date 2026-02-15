@@ -1,0 +1,570 @@
+/**
+ * Style Additions - Supermercado Pro
+ * Desenvolvido por: Dione Castro Alves - InNovaIdeia
+ * 
+ * Estilos adicionais para:
+ * - Command Palette
+ * - Breadcrumbs
+ * - Offline Indicator
+ * - Theme Transitions
+ * - Melhorias de acessibilidade
+ */
+
+/* ============================================
+   COMMAND PALETTE
+   ============================================ */
+
+.command-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.command-category {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.command-category:last-child {
+    border-bottom: none;
+}
+
+.command-category-label {
+    background: var(--bg-secondary);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.command-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border-left: 3px solid transparent;
+}
+
+.command-item:hover,
+.command-item.selected {
+    background: var(--primary);
+    color: white;
+    border-left-color: var(--primary-hover);
+    transform: translateX(2px);
+}
+
+.command-item.selected kbd {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.command-content {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.command-label {
+    font-weight: 500;
+}
+
+.command-shortcut {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    white-space: nowrap;
+}
+
+/* ============================================
+   KEYBOARD SHORTCUTS
+   ============================================ */
+
+kbd {
+    display: inline-block;
+    padding: 0.2rem 0.4rem;
+    font-size: 0.875rem;
+    font-family: 'Courier New', monospace;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] kbd {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================
+   BREADCRUMBS
+   ============================================ */
+
+.breadcrumb {
+    background: transparent;
+    padding: 0;
+    margin-bottom: var(--spacing-md);
+}
+
+.breadcrumb-item {
+    font-size: 0.875rem;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    content: "›";
+    color: var(--text-muted);
+    font-weight: bold;
+}
+
+.breadcrumb-item a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.breadcrumb-item a:hover {
+    color: var(--primary);
+}
+
+.breadcrumb-item.active {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+/* ============================================
+   OFFLINE INDICATOR
+   ============================================ */
+
+#offlineIndicator {
+    animation: slideUp 0.3s ease-out;
+    z-index: 1080;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translate(-50%, 100%);
+        opacity: 0;
+    }
+    to {
+        transform: translate(-50%, 0);
+        opacity: 1;
+    }
+}
+
+#offlineIndicator .alert {
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(10px);
+}
+
+/* ============================================
+   THEME TRANSITIONS
+   ============================================ */
+
+.theme-transitioning,
+.theme-transitioning * {
+    transition: background-color var(--transition-base),
+                color var(--transition-base),
+                border-color var(--transition-base) !important;
+}
+
+/* ============================================
+   PWA MODE ADJUSTMENTS
+   ============================================ */
+
+.pwa-mode .navbar {
+    padding-top: env(safe-area-inset-top);
+}
+
+.pwa-mode body {
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* iOS safe areas */
+@supports (padding: env(safe-area-inset-top)) {
+    .pwa-mode {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+    }
+}
+
+/* ============================================
+   LOADING IMPROVEMENTS
+   ============================================ */
+
+.load-progress {
+    width: 200px;
+    height: 4px;
+    background: var(--bg-secondary);
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 1rem auto 0.5rem;
+    position: relative;
+}
+
+.load-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary) 0%, var(--primary-hover) 100%);
+    transition: width 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.load-progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, 
+        transparent 0%, 
+        rgba(255, 255, 255, 0.3) 50%, 
+        transparent 100%);
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* ============================================
+   FOCUS IMPROVEMENTS (Acessibilidade)
+   ============================================ */
+
+.focus-ring:focus-visible {
+    outline: 3px solid var(--primary);
+    outline-offset: 3px;
+    border-radius: var(--radius-md);
+}
+
+/* Remove outline padrão mas mantém para keyboard navigation */
+*:focus:not(:focus-visible) {
+    outline: none;
+}
+
+*:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+/* ============================================
+   SKIP TO CONTENT
+   ============================================ */
+
+.skip-to-content {
+    position: absolute;
+    top: -100px;
+    left: 0;
+    background: var(--primary);
+    color: white;
+    padding: 1rem 2rem;
+    text-decoration: none;
+    border-radius: 0 0 var(--radius-md) 0;
+    z-index: 10000;
+    font-weight: 600;
+    transition: top var(--transition-base);
+    box-shadow: var(--shadow-lg);
+}
+
+.skip-to-content:focus {
+    top: 0;
+}
+
+/* ============================================
+   IMPROVED MODALS
+   ============================================ */
+
+.modal-content {
+    border: none;
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+}
+
+.modal-header {
+    border-top-left-radius: var(--radius-xl);
+    border-top-right-radius: var(--radius-xl);
+}
+
+.modal-backdrop.show {
+    backdrop-filter: blur(4px);
+}
+
+/* ============================================
+   IMPROVED DROPDOWNS
+   ============================================ */
+
+.dropdown-menu {
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-lg);
+    border-radius: var(--radius-lg);
+    padding: 0.5rem 0;
+    margin-top: 0.5rem;
+    animation: dropdownSlide 0.2s ease-out;
+}
+
+@keyframes dropdownSlide {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.dropdown-item {
+    padding: 0.5rem 1rem;
+    transition: all var(--transition-fast);
+}
+
+.dropdown-item:hover {
+    background: var(--primary);
+    color: white;
+}
+
+.dropdown-item i {
+    width: 1.5rem;
+    text-align: center;
+}
+
+/* ============================================
+   TOAST IMPROVEMENTS
+   ============================================ */
+
+.toast {
+    backdrop-filter: blur(10px);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border-color);
+}
+
+.toast-header {
+    border-top-left-radius: var(--radius-lg);
+    border-top-right-radius: var(--radius-lg);
+    font-weight: 600;
+}
+
+.toast-body {
+    font-weight: 500;
+}
+
+/* ============================================
+   IMPROVED BUTTONS
+   ============================================ */
+
+.btn {
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
+
+.btn-primary {
+    box-shadow: 0 2px 4px rgba(13, 110, 253, 0.2);
+}
+
+.btn-primary:hover {
+    box-shadow: 0 4px 8px rgba(13, 110, 253, 0.3);
+    transform: translateY(-1px);
+}
+
+/* ============================================
+   SCROLL BEHAVIOR
+   ============================================ */
+
+@media (prefers-reduced-motion: no-preference) {
+    html {
+        scroll-behavior: smooth;
+    }
+}
+
+/* Custom scrollbar for command list */
+.command-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.command-list::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+.command-list::-webkit-scrollbar-thumb {
+    background: var(--text-muted);
+    border-radius: var(--radius-full);
+}
+
+.command-list::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* ============================================
+   PRINT STYLES
+   ============================================ */
+
+@media print {
+    #commandPalette,
+    #themeToggle,
+    #offlineIndicator,
+    .skip-to-content {
+        display: none !important;
+    }
+    
+    .breadcrumb {
+        border-bottom: 1px solid #000;
+        padding-bottom: 0.5rem;
+    }
+}
+
+/* ============================================
+   DARK MODE SPECIFIC
+   ============================================ */
+
+[data-theme="dark"] .modal-content {
+    background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .dropdown-menu {
+    background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .dropdown-item:hover {
+    background: var(--primary);
+}
+
+[data-theme="dark"] .toast {
+    background: var(--bg-secondary);
+}
+
+/* ============================================
+   RESPONSIVE IMPROVEMENTS
+   ============================================ */
+
+@media (max-width: 768px) {
+    .command-list {
+        max-height: 300px;
+    }
+    
+    .command-item {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+    }
+    
+    .command-shortcut {
+        display: none;
+    }
+    
+    .breadcrumb {
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-width: 576px) {
+    #offlineIndicator .alert {
+        font-size: 0.875rem;
+        padding: 0.5rem 1rem;
+    }
+}
+
+/* ============================================
+   ANIMATIONS FOR PWA INSTALL
+   ============================================ */
+
+@keyframes bounceIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.3);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.05);
+    }
+    70% {
+        transform: scale(0.9);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.pwa-install-prompt {
+    animation: bounceIn 0.5s ease-out;
+}
+
+/* ============================================
+   HIGH CONTRAST MODE
+   ============================================ */
+
+@media (prefers-contrast: high) {
+    .command-item.selected {
+        border: 2px solid currentColor;
+    }
+    
+    .btn {
+        border-width: 2px;
+    }
+    
+    kbd {
+        border-width: 2px;
+    }
+}
+
+/* ============================================
+   REDUCED MOTION
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .command-item,
+    .dropdown-menu,
+    .toast,
+    .modal,
+    .load-progress-bar::after {
+        animation: none !important;
+        transition: none !important;
+    }
+    
+    html {
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ============================================
+   UTILITIES
+   ============================================ */
+
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.user-select-none {
+    user-select: none;
+}
+
+.backdrop-blur {
+    backdrop-filter: blur(10px);
+}
+
+.text-shadow {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================
+   END OF STYLES
+   ============================================ */
