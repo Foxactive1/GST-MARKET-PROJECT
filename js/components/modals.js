@@ -1,15 +1,36 @@
 /**
  * Componentes de Modais
  * Responsável por gerenciar todos os modais do sistema
+ * Versão integrada com utils aprimorados (máscaras, validações, formatação)
  */
 
 window.modals = (function() {
+    'use strict';
+
+    // Verifica dependências
+    function checkDependencies() {
+        if (!window.state) {
+            console.error('Erro no módulo Modals: window.state não definido');
+            return false;
+        }
+        if (!window.utils) {
+            console.error('Erro no módulo Modals: window.utils não definido');
+            return false;
+        }
+        return true;
+    }
+
     let currentProductId = null;
     let currentClientId = null;
-    
+
+    // ========================================
+    // MODAL DE PRODUTO
+    // ========================================
     function openProductModal(productId = null) {
+        if (!checkDependencies()) return;
+
         currentProductId = productId;
-        
+
         if (productId) {
             const product = window.state.getProducts().find(p => p.id === productId);
             if (product) {
@@ -17,13 +38,13 @@ window.modals = (function() {
                 return;
             }
         }
-        
+
         showProductModal(null);
     }
-    
+
     function showProductModal(product) {
         const isEditing = !!product;
-        
+
         Swal.fire({
             title: isEditing ? 'Editar Produto' : 'Novo Produto',
             html: `
@@ -57,7 +78,10 @@ window.modals = (function() {
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Preço (R$) *</label>
-                            <input type="number" id="prod-preco" class="form-control" value="${product?.preco || ''}" min="0" step="0.01">
+                            <input type="text" id="prod-preco" class="form-control" 
+                                   value="${product?.preco ? window.utils.formatCurrency(product.preco) : ''}" 
+                                   placeholder="0,00"
+                                   oninput="this.value = window.utils.maskCurrencyInput(this.value)">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Estoque Mín.</label>
@@ -78,7 +102,10 @@ window.modals = (function() {
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Preço de Custo (opcional)</label>
-                            <input type="number" id="prod-cost" class="form-control" value="${product?.cost || ''}" min="0" step="0.01">
+                            <input type="text" id="prod-cost" class="form-control" 
+                                   value="${product?.cost ? window.utils.formatCurrency(product.cost) : ''}" 
+                                   placeholder="0,00"
+                                   oninput="this.value = window.utils.maskCurrencyInput(this.value)">
                         </div>
                     </div>
                 </div>
@@ -86,22 +113,31 @@ window.modals = (function() {
             showCancelButton: true,
             confirmButtonText: isEditing ? 'Atualizar' : 'Cadastrar',
             cancelButtonText: 'Cancelar',
+            didOpen: () => {
+                // Aplica máscara inicial se estiver editando (já foi aplicada pelo oninput no value)
+            },
             preConfirm: () => {
+                // Coleta valores
+                const nome = document.getElementById('prod-nome').value.trim();
+                const code = document.getElementById('prod-code').value.trim();
+                const categoria = document.getElementById('prod-categoria').value;
+                const qtd = parseInt(document.getElementById('prod-qtd').value) || 0;
+                const precoStr = document.getElementById('prod-preco').value;
+                const preco = window.utils.parseMonetaryValue(precoStr);
+                const minStock = parseInt(document.getElementById('prod-min').value) || 5;
+                const unit = document.getElementById('prod-unit').value;
+                const costStr = document.getElementById('prod-cost').value;
+                const cost = costStr ? window.utils.parseMonetaryValue(costStr) : null;
+
                 const data = {
-                    nome: document.getElementById('prod-nome').value.trim(),
-                    code: document.getElementById('prod-code').value.trim(),
-                    categoria: document.getElementById('prod-categoria').value,
-                    qtd: parseInt(document.getElementById('prod-qtd').value) || 0,
-                    preco: parseFloat(document.getElementById('prod-preco').value) || 0,
-                    minStock: parseInt(document.getElementById('prod-min').value) || 5,
-                    unit: document.getElementById('prod-unit').value,
-                    cost: parseFloat(document.getElementById('prod-cost').value) || null
+                    nome, code, categoria, qtd, preco, minStock, unit, cost
                 };
-                
+
                 if (!window.utils.validateProduct(data)) {
+                    window.utils.showToast('Preencha todos os campos obrigatórios corretamente.', 'error');
                     return false;
                 }
-                
+
                 return data;
             }
         }).then((result) => {
@@ -113,16 +149,21 @@ window.modals = (function() {
                     window.state.addProduct(result.value);
                     window.utils.showToast('Produto cadastrado!', 'success');
                 }
-                
+
                 // Recarrega módulo atual
                 refreshCurrentModule();
             }
         });
     }
-    
+
+    // ========================================
+    // MODAL DE CLIENTE
+    // ========================================
     function openClientModal(clientId = null) {
+        if (!checkDependencies()) return;
+
         currentClientId = clientId;
-        
+
         if (clientId) {
             const client = window.state.getClients().find(c => c.id === clientId);
             if (client) {
@@ -130,13 +171,13 @@ window.modals = (function() {
                 return;
             }
         }
-        
+
         showClientModal(null);
     }
-    
+
     function showClientModal(client) {
         const isEditing = !!client;
-        
+
         Swal.fire({
             title: isEditing ? 'Editar Cliente' : 'Novo Cliente',
             html: `
@@ -149,11 +190,17 @@ window.modals = (function() {
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
                             <label class="form-label">CPF</label>
-                            <input id="client-cpf" class="form-control" value="${client?.cpf || ''}" placeholder="000.000.000-00">
+                            <input id="client-cpf" class="form-control" 
+                                   value="${client?.cpf || ''}" 
+                                   placeholder="000.000.000-00"
+                                   oninput="this.value = window.utils.maskCPFInput(this.value)">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Telefone *</label>
-                            <input id="client-fone" class="form-control" value="${client?.fone || ''}" placeholder="(00) 00000-0000">
+                            <input id="client-fone" class="form-control" 
+                                   value="${client?.fone || ''}" 
+                                   placeholder="(00) 00000-0000"
+                                   oninput="this.value = window.utils.maskPhoneInput(this.value)">
                         </div>
                     </div>
                     
@@ -192,19 +239,20 @@ window.modals = (function() {
             confirmButtonText: isEditing ? 'Atualizar' : 'Cadastrar',
             cancelButtonText: 'Cancelar',
             preConfirm: () => {
-                const data = {
-                    nome: document.getElementById('client-nome').value.trim(),
-                    cpf: document.getElementById('client-cpf').value.trim(),
-                    fone: document.getElementById('client-fone').value.trim(),
-                    email: document.getElementById('client-email').value.trim(),
-                    birthDate: document.getElementById('client-birth').value,
-                    gender: document.getElementById('client-gender').value
-                };
-                
+                const nome = document.getElementById('client-nome').value.trim();
+                const cpf = document.getElementById('client-cpf').value.trim();
+                const fone = document.getElementById('client-fone').value.trim();
+                const email = document.getElementById('client-email').value.trim();
+                const birthDate = document.getElementById('client-birth').value;
+                const gender = document.getElementById('client-gender').value;
+
+                const data = { nome, cpf, fone, email, birthDate, gender };
+
                 if (!window.utils.validateClient(data)) {
+                    window.utils.showToast('Preencha nome e telefone corretamente.', 'error');
                     return false;
                 }
-                
+
                 return data;
             }
         }).then((result) => {
@@ -216,16 +264,18 @@ window.modals = (function() {
                     window.state.addClient(result.value);
                     window.utils.showToast('Cliente cadastrado!', 'success');
                 }
-                
+
                 refreshCurrentModule();
             }
         });
     }
-    
+
+    // ========================================
+    // FUNÇÃO AUXILIAR PARA RECARREGAR MÓDULO ATUAL
+    // ========================================
     function refreshCurrentModule() {
-        // Determina módulo atual baseado na view
         const currentView = window.app?.getCurrentView() || 'dashboard';
-        
+
         switch(currentView) {
             case 'dashboard':
                 window.dashboard?.render();
@@ -247,8 +297,10 @@ window.modals = (function() {
                 break;
         }
     }
-    
-    // API Pública
+
+    // ========================================
+    // API PÚBLICA
+    // ========================================
     return {
         openProductModal,
         openClientModal
