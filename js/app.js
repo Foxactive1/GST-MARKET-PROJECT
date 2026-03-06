@@ -1,14 +1,9 @@
-/**
- * Aplicação Principal
- * Agora verifica se os módulos existem antes de chamá-los
- */
 window.app = (function() {
     let currentView = 'dashboard';
 
     function init() {
         console.log('🚀 Inicializando Supermercado Pro Modular...');
 
-        // Verifica dependências críticas
         if (!window.state) {
             console.error('❌ state.js não carregou corretamente!');
             document.body.innerHTML = '<div class="alert alert-danger m-5">Erro crítico: state.js não carregou. Verifique o console.</div>';
@@ -17,18 +12,16 @@ window.app = (function() {
 
         setupGlobalListeners();
 
-        // Tenta carregar a view inicial
-        try {
+        if (!window.auth || !window.auth.isAuthenticated()) {
+            switchView('login');
+        } else {
             switchView('dashboard');
-            window.utils?.showToast('Sistema inicializado com sucesso!', 'success');
-        } catch (e) {
-            console.error('Erro ao iniciar dashboard:', e);
         }
     }
 
     function setupGlobalListeners() {
         document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey) {
+            if (e.ctrlKey && !e.shiftKey && !e.altKey) {
                 const actions = {
                     'd': 'dashboard',
                     'p': 'pdv',
@@ -39,7 +32,11 @@ window.app = (function() {
                 };
                 if (actions[e.key]) {
                     e.preventDefault();
-                    switchView(actions[e.key]);
+                    if (window.auth && window.auth.isAuthenticated()) {
+                        switchView(actions[e.key]);
+                    } else {
+                        switchView('login');
+                    }
                 }
             }
         });
@@ -47,16 +44,21 @@ window.app = (function() {
 
     function switchView(view) {
         if (!view) return;
+        
+        if (window.auth && !window.auth.isAuthenticated() && view !== 'login') {
+            view = 'login';
+        }
+
         currentView = view;
 
-        // Mapeia views para módulos
         const modules = {
             dashboard: window.dashboard,
             pdv: window.pdv,
             estoque: window.estoque,
             clientes: window.clientes,
             relatorios: window.relatorios,
-            fidelidade: window.fidelidade
+            fidelidade: window.fidelidade,
+            login: window.auth
         };
 
         const module = modules[view];
@@ -64,7 +66,6 @@ window.app = (function() {
             module.render();
         } else {
             console.warn(`Módulo "${view}" não disponível ou sem método render.`);
-            // Fallback: exibe mensagem amigável
             document.getElementById('mainContent').innerHTML = `
                 <div class="alert alert-warning">
                     <h4>Módulo em construção</h4>
@@ -73,16 +74,54 @@ window.app = (function() {
             `;
         }
 
-        // Atualiza título da página
         const titles = {
             dashboard: 'Dashboard',
             pdv: 'PDV - Ponto de Venda',
             estoque: 'Gestão de Estoque',
             clientes: 'Gestão de Clientes',
             relatorios: 'Relatórios',
-            fidelidade: 'Programa de Fidelidade'
+            fidelidade: 'Programa de Fidelidade',
+            login: 'Login'
         };
         document.title = `Supermercado Pro - ${titles[view] || view}`;
+        
+        updateNavVisibility();
+    }
+
+    function updateNavVisibility() {
+        const isAuth = window.auth && window.auth.isAuthenticated();
+        const navbarLinks = document.querySelectorAll('.nav-link[data-view]');
+        const dropdownItems = document.querySelectorAll('.dropdown-item[data-view]');
+        
+        navbarLinks.forEach(link => {
+            if (link.dataset.view && link.dataset.view !== 'login') {
+                link.style.display = isAuth ? '' : 'none';
+            }
+        });
+        
+        dropdownItems.forEach(item => {
+            if (item.dataset.view && item.dataset.view !== 'login') {
+                item.style.display = isAuth ? '' : 'none';
+            }
+        });
+
+        // Gerencia botão de logout
+        const themeToggle = document.getElementById('themeToggle');
+        if (themeToggle) {
+            let logoutBtn = document.getElementById('logoutBtn');
+            if (!logoutBtn && isAuth) {
+                logoutBtn = document.createElement('button');
+                logoutBtn.id = 'logoutBtn';
+                logoutBtn.className = 'nav-link btn btn-link';
+                logoutBtn.setAttribute('aria-label', 'Sair');
+                logoutBtn.setAttribute('title', 'Sair');
+                logoutBtn.innerHTML = '<i class="bi bi-box-arrow-right"></i>';
+                logoutBtn.onclick = () => window.auth.logout();
+                themeToggle.parentNode.insertBefore(logoutBtn, themeToggle);
+            } else if (logoutBtn && !isAuth) {
+                logoutBtn.remove();
+            }
+        }
     }
 
     function getCurrentView() {
