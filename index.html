@@ -495,6 +495,7 @@
     <script src="./js/components/modals.js" defer></script>
     
     <!-- Modules -->
+    <script src="./js/modules/auth.js" defer></script>
     <script src="./js/modules/dashboard.js" defer></script>
     <script src="./js/modules/pdv.js" defer></script>
     <script src="./js/modules/estoque.js" defer></script>
@@ -771,6 +772,15 @@
                 }, 0);
             });
         }
+	        function hideQuickActions() {
+	    localStorage.setItem('pdv-hide-quick-actions', 'true');
+	    render(); // Re-renderiza o PDV para ocultar o painel
+}
+
+		function toggleQuickActions() {
+		    localStorage.removeItem('pdv-hide-quick-actions');
+		    render(); // Re-renderiza para mostrar o painel
+		}
     </script>
 </body>
 </html>
