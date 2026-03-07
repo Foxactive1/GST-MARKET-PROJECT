@@ -22,6 +22,7 @@ window.modals = (function() {
 
     let currentProductId = null;
     let currentClientId = null;
+    let currentSupplierId = null;   // <-- novo
 
     // ========================================
     // MODAL DE PRODUTO
@@ -113,11 +114,7 @@ window.modals = (function() {
             showCancelButton: true,
             confirmButtonText: isEditing ? 'Atualizar' : 'Cadastrar',
             cancelButtonText: 'Cancelar',
-            didOpen: () => {
-                // Aplica máscara inicial se estiver editando (já foi aplicada pelo oninput no value)
-            },
             preConfirm: () => {
-                // Coleta valores
                 const nome = document.getElementById('prod-nome').value.trim();
                 const code = document.getElementById('prod-code').value.trim();
                 const categoria = document.getElementById('prod-categoria').value;
@@ -134,7 +131,7 @@ window.modals = (function() {
                 };
 
                 if (!window.utils.validateProduct(data)) {
-                    window.utils.showToast('Preencha todos os campos obrigatórios corretamente.', 'error');
+                    Swal.showValidationMessage('Preencha todos os campos obrigatórios corretamente.');
                     return false;
                 }
 
@@ -150,7 +147,6 @@ window.modals = (function() {
                     window.utils.showToast('Produto cadastrado!', 'success');
                 }
 
-                // Recarrega módulo atual
                 refreshCurrentModule();
             }
         });
@@ -249,7 +245,7 @@ window.modals = (function() {
                 const data = { nome, cpf, fone, email, birthDate, gender };
 
                 if (!window.utils.validateClient(data)) {
-                    window.utils.showToast('Preencha nome e telefone corretamente.', 'error');
+                    Swal.showValidationMessage('Preencha nome e telefone corretamente.');
                     return false;
                 }
 
@@ -266,6 +262,126 @@ window.modals = (function() {
                 }
 
                 refreshCurrentModule();
+            }
+        });
+    }
+
+    // ========================================
+    // MODAL DE FORNECEDOR
+    // ========================================
+    function openSupplierModal(supplierId = null) {
+        if (!checkDependencies()) return;
+
+        currentSupplierId = supplierId;
+
+        if (supplierId) {
+            const supplier = window.state.getSuppliers().find(s => s.id === supplierId);
+            if (supplier) {
+                showSupplierModal(supplier);
+                return;
+            }
+        }
+
+        showSupplierModal(null);
+    }
+
+    function showSupplierModal(supplier) {
+        const isEditing = !!supplier;
+
+        Swal.fire({
+            title: isEditing ? 'Editar Fornecedor' : 'Novo Fornecedor',
+            html: `
+                <div class="text-start">
+                    <div class="mb-3">
+                        <label class="form-label">Razão Social / Nome *</label>
+                        <input id="supplier-nome" class="form-control" value="${supplier?.nome || ''}" placeholder="Ex: Distribuidora ABC">
+                    </div>
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">CNPJ</label>
+                            <input id="supplier-cnpj" class="form-control" 
+                                   value="${supplier?.cnpj || ''}" 
+                                   placeholder="00.000.000/0000-00"
+                                   oninput="this.value = window.utils.maskCNPJInput(this.value)">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Inscrição Estadual</label>
+                            <input id="supplier-ie" class="form-control" value="${supplier?.ie || ''}" placeholder="Opcional">
+                        </div>
+                    </div>
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Telefone *</label>
+                            <input id="supplier-fone" class="form-control" 
+                                   value="${supplier?.fone || ''}" 
+                                   placeholder="(00) 00000-0000"
+                                   oninput="this.value = window.utils.maskPhoneInput(this.value)">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email</label>
+                            <input type="email" id="supplier-email" class="form-control" value="${supplier?.email || ''}" placeholder="contato@fornecedor.com">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Endereço</label>
+                        <input id="supplier-endereco" class="form-control" value="${supplier?.endereco || ''}" placeholder="Rua, número, bairro, cidade/UF">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Contato (pessoa de referência)</label>
+                        <input id="supplier-contato" class="form-control" value="${supplier?.contato || ''}" placeholder="Nome do contato comercial">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Observações</label>
+                        <textarea id="supplier-obs" class="form-control" rows="2">${supplier?.obs || ''}</textarea>
+                    </div>
+                </div>
+            `,
+            showCancelButton: true,
+            confirmButtonText: isEditing ? 'Atualizar' : 'Cadastrar',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const nome = document.getElementById('supplier-nome').value.trim();
+                const cnpj = document.getElementById('supplier-cnpj').value.trim();
+                const ie = document.getElementById('supplier-ie').value.trim();
+                const fone = document.getElementById('supplier-fone').value.trim();
+                const email = document.getElementById('supplier-email').value.trim();
+                const endereco = document.getElementById('supplier-endereco').value.trim();
+                const contato = document.getElementById('supplier-contato').value.trim();
+                const obs = document.getElementById('supplier-obs').value.trim();
+
+                if (!nome) {
+                    Swal.showValidationMessage('O nome/razão social é obrigatório');
+                    return false;
+                }
+                if (!fone) {
+                    Swal.showValidationMessage('O telefone é obrigatório');
+                    return false;
+                }
+
+                return { nome, cnpj, ie, fone, email, endereco, contato, obs };
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                if (isEditing) {
+                    window.state.updateSupplier(supplier.id, result.value);
+                    window.utils.showToast('Fornecedor atualizado!', 'success');
+                } else {
+                    window.state.addSupplier(result.value);
+                    window.utils.showToast('Fornecedor cadastrado!', 'success');
+                }
+
+                // Se estiver na view de fornecedores, recarrega
+                const currentView = window.app?.getCurrentView();
+                if (currentView === 'fornecedores') {
+                    window.fornecedores?.render();
+                } else {
+                    refreshCurrentModule();
+                }
             }
         });
     }
@@ -295,6 +411,9 @@ window.modals = (function() {
             case 'fidelidade':
                 window.fidelidade?.render();
                 break;
+            case 'fornecedores':
+                window.fornecedores?.render();
+                break;
         }
     }
 
@@ -303,6 +422,7 @@ window.modals = (function() {
     // ========================================
     return {
         openProductModal,
-        openClientModal
+        openClientModal,
+        openSupplierModal   // <-- AGORA EXPOSTA
     };
 })();
