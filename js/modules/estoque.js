@@ -2084,7 +2084,8 @@ ${barcodeArt}
             initMovementChart();
         }, 100);
         
-        // Adiciona listeners de teclado
+        // FIX BUG-04: remove listener anterior antes de adicionar, evitando acúmulo a cada render()
+        document.removeEventListener('keydown', handleKeyboardShortcuts);
         document.addEventListener('keydown', handleKeyboardShortcuts);
     }
     
