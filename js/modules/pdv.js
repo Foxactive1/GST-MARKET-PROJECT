@@ -326,27 +326,27 @@ window.pdv = (function() {
                 <!-- Filtros rápidos -->
                 <div class="d-flex gap-2 mb-3 flex-wrap">
                     <button class="btn btn-sm ${currentFilter === 'all' ? 'btn-primary' : 'btn-outline-primary'}" 
-                            onclick="window.pdv.filterCategory('all')">
+                            onclick="window.pdv.filterCategory('all', this)">
                         <i class="bi bi-grid-3x3"></i> Todos
                     </button>
                     <button class="btn btn-sm ${currentFilter === 'Alimentos' ? 'btn-primary' : 'btn-outline-primary'}" 
-                            onclick="window.pdv.filterCategory('Alimentos')">
+                            onclick="window.pdv.filterCategory('Alimentos', this)">
                         🍞 Alimentos
                     </button>
                     <button class="btn btn-sm ${currentFilter === 'Bebidas' ? 'btn-primary' : 'btn-outline-primary'}" 
-                            onclick="window.pdv.filterCategory('Bebidas')">
+                            onclick="window.pdv.filterCategory('Bebidas', this)">
                         🥤 Bebidas
                     </button>
                     <button class="btn btn-sm ${currentFilter === 'Higiene' ? 'btn-primary' : 'btn-outline-primary'}" 
-                            onclick="window.pdv.filterCategory('Higiene')">
+                            onclick="window.pdv.filterCategory('Higiene', this)">
                         🧼 Higiene
                     </button>
                     <button class="btn btn-sm ${currentFilter === 'Limpeza' ? 'btn-primary' : 'btn-outline-primary'}" 
-                            onclick="window.pdv.filterCategory('Limpeza')">
+                            onclick="window.pdv.filterCategory('Limpeza', this)">
                         🧹 Limpeza
                     </button>
                     <button class="btn btn-sm ${currentFilter === 'favorites' ? 'btn-primary' : 'btn-outline-primary'}" 
-                            onclick="window.pdv.filterCategory('favorites')">
+                            onclick="window.pdv.filterCategory('favorites', this)">
                         <i class="bi bi-star-fill"></i> Favoritos
                     </button>
                 </div>
@@ -684,25 +684,64 @@ window.pdv = (function() {
     }
     
     function renderQuickActions() {
+    // Verifica se o usuário fechou os atalhos
+    const hideQuickActions = localStorage.getItem('pdv-hide-quick-actions') === 'true';
+    
+    if (hideQuickActions) {
+        // Botão flutuante para reabrir
         return `
             <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1000;">
-                <div class="card shadow-lg" style="width: 250px;">
-                    <div class="card-body p-2">
-                        <div class="small fw-bold mb-2">
-                            <i class="bi bi-keyboard"></i> Atalhos Rápidos
+                <button class="btn btn-sm btn-primary rounded-circle shadow" 
+                        onclick="window.pdv.toggleQuickActions()"
+                        title="Mostrar atalhos">
+                    <i class="bi bi-keyboard"></i>
+                </button>
+            </div>
+        `;
+    }
+
+    // Painel de atalhos aberto
+    return `
+        <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1000; bottom: 70px;">
+            <div class="card shadow-lg" style="width: 250px;">
+                <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center py-2">
+                    <span class="small fw-bold">
+                        <i class="bi bi-keyboard"></i> Atalhos Rápidos
+                    </span>
+                    <button class="btn btn-sm btn-link p-0 text-muted" 
+                            onclick="window.pdv.hideQuickActions()"
+                            title="Fechar">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+                <div class="card-body p-2 pt-0">
+                    <div class="small text-muted">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><kbd>F1-F12</kbd></span>
+                            <span>Favoritos</span>
                         </div>
-                        <div class="small text-muted">
-                            <div><kbd>F1-F12</kbd> Favoritos</div>
-                            <div><kbd>F9</kbd> Finalizar</div>
-                            <div><kbd>F8</kbd> Suspender</div>
-                            <div><kbd>Esc</kbd> Limpar</div>
-                            <div><kbd>Enter</kbd> Buscar</div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><kbd>F9</kbd></span>
+                            <span>Finalizar</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><kbd>F8</kbd></span>
+                            <span>Suspender</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><kbd>Esc</kbd></span>
+                            <span>Limpar</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span><kbd>Enter</kbd></span>
+                            <span>Buscar</span>
                         </div>
                     </div>
                 </div>
             </div>
-        `;
-    }
+        </div>
+    `;
+}
     
     // ========================================
     // GESTÃO DO CARRINHO
@@ -836,10 +875,14 @@ window.pdv = (function() {
             cartItemsContainer.innerHTML = renderCartItems();
         }
         
-        // Atualiza resumo
+        // FIX BUG-08: outerHTML invalida a referência após substituição.
+        // Usar replaceWith() para substituir o nó com segurança.
         const summaryContainer = cartItemsContainer?.parentElement?.querySelector('.border-top');
         if (summaryContainer) {
-            summaryContainer.outerHTML = renderCartSummary();
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = renderCartSummary();
+            const newSummary = tempDiv.firstElementChild;
+            if (newSummary) summaryContainer.replaceWith(newSummary);
         }
         
         // Atualiza contador
@@ -1079,20 +1122,22 @@ window.pdv = (function() {
     // ========================================
     
     function toggleClient() {
-        if (selectedClient) {
-            selectedClient = null;
-        } else {
-            selectedClient = {};
-        }
-        
-        // Re-renderiza área do carrinho
-        const cartContainer = document.querySelector('.cart-container');
-        if (cartContainer) {
-            const state = window.state.get();
-            cartContainer.outerHTML = renderCartArea(state);
-        }
+    if (selectedClient) {
+        selectedClient = null;
+    } else {
+        selectedClient = {};
     }
-    
+
+    // Atualizar apenas a área de seleção de cliente
+    const clientArea = document.getElementById('client-select-area');
+    if (clientArea) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = renderClientSelector(window.state.getClients());
+        const newClientArea = tempDiv.firstElementChild;
+        if (newClientArea) clientArea.replaceWith(newClientArea);
+    }
+    updateCart();
+}
     function updateSelectedClient(clientId) {
         if (!clientId) {
             selectedClient = null;
@@ -1500,44 +1545,89 @@ window.pdv = (function() {
     }
     
     function printReceipt(html) {
-        const printWindow = window.open('', '_blank', 'width=400,height=600');
-        printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Comprovante de Venda</title>
-                <style>
-                    body {
-                        font-family: 'Courier New', monospace;
-                        padding: 20px;
-                        margin: 0;
-                    }
-                    @media print {
-                        body {
-                            margin: 0;
-                            padding: 10px;
-                        }
-                    }
-                    @page {
-                        size: 80mm auto;
-                        margin: 0;
-                    }
-                </style>
-            </head>
-            <body>
-                ${html}
-                <script>
-                    window.onload = () => {
-                        window.print();
-                        setTimeout(() => window.close(), 100);
-                    };
-                </script>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
+    // Tenta abrir a janela de impressão
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    
+    // Verifica se o pop-up foi bloqueado
+    if (!printWindow) {
+        window.utils.showAlert(
+            'Pop-up bloqueado',
+            'warning',
+            'Permita pop-ups para imprimir o cupom ou utilize a opção "Salvar PDF".'
+        );
+        return;
     }
     
+    // Escreve o conteúdo do cupom
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Comprovante de Venda</title>
+            <style>
+                body {
+                    font-family: 'Courier New', monospace;
+                    padding: 20px;
+                    margin: 0;
+                }
+                @media print {
+                    body {
+                        margin: 0;
+                        padding: 10px;
+                    }
+                }
+                @page {
+                    size: 80mm auto;
+                    margin: 0;
+                }
+                .manual-close {
+                    display: none;
+                    text-align: center;
+                    margin-top: 20px;
+                    font-family: Arial, sans-serif;
+                }
+                @media screen {
+                    .manual-close {
+                        display: block;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            ${html}
+            <div class="manual-close">
+                <p>Após imprimir, feche esta janela manualmente.</p>
+                <button onclick="window.close()">Fechar Janela</button>
+            </div>
+            <script>
+                window.onload = function() {
+                    // Aguarda o carregamento completo e dispara a impressão
+                    window.print();
+                    
+                    // Tenta fechar automaticamente após a impressão (se suportado)
+                    if (window.matchMedia) {
+                        var mediaQueryList = window.matchMedia('print');
+                        mediaQueryList.addListener(function(mql) {
+                            if (!mql.matches) {
+                                // Saiu do modo de impressão – tenta fechar
+                                setTimeout(function() {
+                                    window.close();
+                                }, 500);
+                            }
+                        });
+                    }
+                    
+                    // Fallback: após 10 segundos, se a janela ainda estiver aberta,
+                    // mantém o botão para fechamento manual (já incluso no HTML)
+                };
+            </script>
+        </body>
+        </html>
+    `);
+    
+    printWindow.document.close();
+    printWindow.focus(); // Traz a janela para frente
+}
     // ========================================
     // VENDAS SUSPENSAS
     // ========================================
@@ -2583,7 +2673,8 @@ window.pdv = (function() {
         return products.filter(p => p.categoria === currentFilter);
     }
     
-    function filterCategory(category) {
+    function filterCategory(category, el) {
+        // FIX BUG-06: event global implícito substituído por parâmetro explícito `el`
         currentFilter = category;
         
         // Atualiza UI
@@ -2593,8 +2684,10 @@ window.pdv = (function() {
             btn.classList.add('btn-outline-primary');
         });
         
-        event.target.classList.remove('btn-outline-primary');
-        event.target.classList.add('btn-primary');
+        if (el) {
+            el.classList.remove('btn-outline-primary');
+            el.classList.add('btn-primary');
+        }
         
         // Atualiza grid
         const grid = document.getElementById('product-grid');
@@ -2809,41 +2902,52 @@ window.pdv = (function() {
     
     init();
     
+    function hideQuickActions() {
+    localStorage.setItem('pdv-hide-quick-actions', 'true');
+    render();
+	}
+
+	function toggleQuickActions() {
+    localStorage.removeItem('pdv-hide-quick-actions');
+    render();
+}
     // ========================================
     // API PÚBLICA
     // ========================================
     
     return {
-        render,
-        addToCart,
-        increaseQuantity,
-        decreaseQuantity,
-        removeFromCart,
-        clearCart,
-        updateCart,
-        toggleClient,
-        updateSelectedClient,
-        removeClient,
-        applyGlobalDiscount,
-        removeGlobalDiscount,
-        applyItemDiscount,
-        filterCategory,
-        openCheckout,
-        suspendSale,
-        showSuspendedSales,
-        recoverSale,
-        viewSuspendedSale,
-        deleteSuspendedSale,
-        openCashier,
-        closeCashier,
-        showCashMovements,
-        registerWithdrawal,
-        registerReinforcement,
-        showCashierReport,
-        showFavorites,
-        CONFIG,
-        // Utilitários expostos (opcional)
-        parseMonetaryValue: window.utils.parseMonetaryValue,
-        formatCurrency: window.utils.formatCurrency
-    };
+	    render,
+	    addToCart,
+	    increaseQuantity,
+	    decreaseQuantity,
+	    removeFromCart,
+	    clearCart,
+	    updateCart,
+	    toggleClient,
+	    updateSelectedClient,
+	    removeClient,
+	    applyGlobalDiscount,
+	    removeGlobalDiscount,
+	    applyItemDiscount,
+	    filterCategory,
+	    openCheckout,
+	    suspendSale,
+	    showSuspendedSales,
+	    recoverSale,
+	    viewSuspendedSale,
+	    deleteSuspendedSale,
+	    openCashier,
+	    closeCashier,
+	    showCashMovements,
+	    registerWithdrawal,
+	    registerReinforcement,
+	    showCashierReport,
+	    showFavorites,
+	    CONFIG,
+	    hideQuickActions,
+	    toggleQuickActions,
+	    // Utilitários expostos (opcional)
+	    parseMonetaryValue: window.utils.parseMonetaryValue,
+	    formatCurrency: window.utils.formatCurrency
+	};
 })();
