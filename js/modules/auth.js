@@ -5,15 +5,24 @@
  */
 window.auth = (function() {
     const AUTH_KEY = 'supermercado_auth';
-    
-    // Usuário simulado (substituir por chamada real à API)
-    const MOCK_USER = {
-        username: 'admin',
-        password: 'admin',
-        nome: 'Administrador',
-        email: 'admin@supermercado.com',
-        role: 'admin'
-    };
+
+    // Agora usamos um array de usuários (admin e operador)
+    const MOCK_USERS = [
+        {
+            username: 'admin',
+            password: 'admin',
+            nome: 'Administrador',
+            email: 'admin@supermercado.com',
+            role: 'admin'
+        },
+        {
+            username: 'operador',
+            password: 'operador',
+            nome: 'Operador',
+            email: 'operador@supermercado.com',
+            role: 'operador'
+        }
+    ];
 
     function isAuthenticated() {
         const authData = localStorage.getItem(AUTH_KEY) || sessionStorage.getItem(AUTH_KEY);
@@ -39,24 +48,26 @@ window.auth = (function() {
     async function login(username, password, rememberMe = false) {
         return new Promise((resolve, reject) => {
             setTimeout(() => {
-                if (username === MOCK_USER.username && password === MOCK_USER.password) {
+                // Procura o usuário no array MOCK_USERS
+                const user = MOCK_USERS.find(u => u.username === username && u.password === password);
+                if (user) {
                     const authData = {
                         user: {
-                            username: MOCK_USER.username,
-                            nome: MOCK_USER.nome,
-                            email: MOCK_USER.email,
-                            role: MOCK_USER.role
+                            username: user.username,
+                            nome: user.nome,
+                            email: user.email,
+                            role: user.role
                         },
                         timestamp: Date.now(),
                         token: 'fake-jwt-token-' + Math.random().toString(36).substring(2)
                     };
-                    
+
                     const storage = rememberMe ? localStorage : sessionStorage;
                     storage.setItem(AUTH_KEY, JSON.stringify(authData));
-                    
+
                     // Se quiser armazenar no state (opcional), descomente:
                     // if (window.state) window.state.user = authData.user;
-                    
+
                     resolve({ success: true, user: authData.user });
                 } else {
                     reject({ success: false, message: 'Usuário ou senha inválidos' });
@@ -68,10 +79,10 @@ window.auth = (function() {
     function logout() {
         localStorage.removeItem(AUTH_KEY);
         sessionStorage.removeItem(AUTH_KEY);
-        
+
         // Remove referência no state (se tiver)
         // if (window.state) window.state.user = null;
-        
+
         // Redireciona para login
         if (window.app && typeof window.app.switchView === 'function') {
             window.app.switchView('login');
@@ -125,7 +136,7 @@ window.auth = (function() {
                         </div>
                         <div class="card-footer text-center py-3">
                             <small class="text-muted">
-                                Use <strong>admin / admin</strong> para teste
+                                Use <strong>admin / admin</strong> (administrador) ou <strong>operador / operador</strong> (operador)
                             </small>
                         </div>
                     </div>
@@ -138,7 +149,7 @@ window.auth = (function() {
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
             const rememberMe = document.getElementById('rememberMe').checked;
@@ -155,7 +166,9 @@ window.auth = (function() {
                 const result = await login(username, password, rememberMe);
                 if (result.success) {
                     window.utils?.showToast(`Bem-vindo, ${result.user.nome}!`, 'success');
-                    window.app.switchView('dashboard');
+                    // Redireciona baseado na role (admin → dashboard, operador → pdv)
+                    const defaultView = result.user.role === 'admin' ? 'dashboard' : 'pdv';
+                    window.app.switchView(defaultView);
                 }
             } catch (error) {
                 window.utils?.showToast(error.message || 'Erro ao fazer login', 'danger');
@@ -167,7 +180,10 @@ window.auth = (function() {
 
     function render() {
         if (isAuthenticated()) {
-            window.app.switchView('dashboard');
+            // Se já autenticado, redireciona para a view padrão baseada na role
+            const user = getUser();
+            const defaultView = user.role === 'admin' ? 'dashboard' : 'pdv';
+            window.app.switchView(defaultView);
             return;
         }
         renderLogin();
