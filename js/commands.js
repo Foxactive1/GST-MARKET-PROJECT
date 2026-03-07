@@ -55,7 +55,7 @@ class CommandPalette {
                 label: 'Ir para PDV',
                 icon: 'bi-cash-register',
                 category: 'Navegação',
-                shortcut: 'Ctrl+P',
+                shortcut: 'Ctrl+Shift+P', // FIX BUG-09: era Ctrl+P — conflitava com action-print
                 action: () => window.app?.switchView('pdv')
             },
             {
@@ -561,11 +561,81 @@ const commandPaletteStyles = `
 </style>
 `;
 
-// Injetar estilos
+// FIX BUG-07: <div> não é válido em <head>. Criar elemento <style> diretamente.
 if (!document.getElementById('command-palette-styles')) {
-    const styleElement = document.createElement('div');
+    const styleElement = document.createElement('style');
     styleElement.id = 'command-palette-styles';
-    styleElement.innerHTML = commandPaletteStyles;
+    styleElement.textContent = `
+    .command-list {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    
+    .command-category {
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .command-category:last-child {
+        border-bottom: none;
+    }
+    
+    .command-category-label {
+        background: var(--bg-secondary);
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+    
+    .command-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 1rem;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+    }
+    
+    .command-item:hover,
+    .command-item.selected {
+        background: var(--primary);
+        color: white;
+    }
+    
+    .command-item.selected kbd {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        border-color: rgba(255, 255, 255, 0.3);
+    }
+    
+    .command-content {
+        display: flex;
+        align-items: center;
+    }
+    
+    .command-label {
+        font-weight: 500;
+    }
+    
+    .command-shortcut {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+    }
+    
+    kbd {
+        display: inline-block;
+        padding: 0.2rem 0.4rem;
+        font-size: 0.875rem;
+        font-family: 'Courier New', monospace;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+    `;
     document.head.appendChild(styleElement);
 }
 
