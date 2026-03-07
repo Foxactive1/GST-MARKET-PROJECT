@@ -1,5 +1,18 @@
 window.app = (function() {
+    'use strict';
+
     let currentView = 'dashboard';
+
+    // Mapa de permissões: cada view e as roles que podem acessá-la
+    const VIEW_PERMISSIONS = {
+	    dashboard: ['admin'],
+	    pdv: ['admin', 'operador'],
+	    estoque: ['admin'],
+	    clientes: ['admin'],
+	    fornecedores: ['admin'],   // ← nova view (apenas admin)
+	    fidelidade: ['admin'],
+	    relatorios: ['admin']
+	};
 
     function init() {
         console.log('🚀 Inicializando Supermercado Pro Modular...');
@@ -15,7 +28,10 @@ window.app = (function() {
         if (!window.auth || !window.auth.isAuthenticated()) {
             switchView('login');
         } else {
-            switchView('dashboard');
+            // Redireciona para a view padrão baseada na role
+            const user = window.auth.getUser();
+            const defaultView = user.role === 'admin' ? 'dashboard' : 'pdv';
+            switchView(defaultView);
         }
     }
 
@@ -44,22 +60,36 @@ window.app = (function() {
 
     function switchView(view) {
         if (!view) return;
-        
+
+        // Se não estiver autenticado, só pode ver login
         if (window.auth && !window.auth.isAuthenticated() && view !== 'login') {
             view = 'login';
+        }
+
+        // Verifica permissões se estiver autenticado
+        if (window.auth && window.auth.isAuthenticated()) {
+            const user = window.auth.getUser();
+            const allowedRoles = VIEW_PERMISSIONS[view];
+            if (!allowedRoles || !allowedRoles.includes(user.role)) {
+                // Redireciona para a view padrão do perfil
+                const defaultView = user.role === 'admin' ? 'dashboard' : 'pdv';
+                window.utils?.showToast('Acesso negado a esta funcionalidade', 'warning');
+                view = defaultView;
+            }
         }
 
         currentView = view;
 
         const modules = {
-            dashboard: window.dashboard,
-            pdv: window.pdv,
-            estoque: window.estoque,
-            clientes: window.clientes,
-            relatorios: window.relatorios,
-            fidelidade: window.fidelidade,
-            login: window.auth
-        };
+		    dashboard: window.dashboard,
+		    pdv: window.pdv,
+		    estoque: window.estoque,
+		    clientes: window.clientes,
+		    fornecedores: window.fornecedores,   // ← novo
+		    relatorios: window.relatorios,
+		    fidelidade: window.fidelidade,
+		    login: window.auth
+		};
 
         const module = modules[view];
         if (module && typeof module.render === 'function') {
@@ -84,25 +114,34 @@ window.app = (function() {
             login: 'Login'
         };
         document.title = `Supermercado Pro - ${titles[view] || view}`;
-        
+
         updateNavVisibility();
     }
 
+    /**
+     * Atualiza a visibilidade dos itens de navegação com base na role do usuário.
+     */
     function updateNavVisibility() {
         const isAuth = window.auth && window.auth.isAuthenticated();
-        const navbarLinks = document.querySelectorAll('.nav-link[data-view]');
-        const dropdownItems = document.querySelectorAll('.dropdown-item[data-view]');
-        
-        navbarLinks.forEach(link => {
-            if (link.dataset.view && link.dataset.view !== 'login') {
-                link.style.display = isAuth ? '' : 'none';
+        const user = isAuth ? window.auth.getUser() : null;
+        const role = user ? user.role : null;
+
+        // Seleciona todos os links de navegação que possuem data-view (exceto login)
+        const navLinks = document.querySelectorAll('.nav-link[data-view], .dropdown-item[data-view]');
+
+        navLinks.forEach(link => {
+            const view = link.dataset.view;
+            if (!view) return;
+
+            if (!isAuth) {
+                // Se não autenticado, esconde todos os links (exceto login, mas login não tem data-view)
+                link.style.display = 'none';
+                return;
             }
-        });
-        
-        dropdownItems.forEach(item => {
-            if (item.dataset.view && item.dataset.view !== 'login') {
-                item.style.display = isAuth ? '' : 'none';
-            }
+
+            // Verifica se a view é permitida para a role atual
+            const allowed = VIEW_PERMISSIONS[view] && VIEW_PERMISSIONS[view].includes(role);
+            link.style.display = allowed ? '' : 'none';
         });
 
         // Gerencia botão de logout
@@ -121,6 +160,20 @@ window.app = (function() {
             } else if (logoutBtn && !isAuth) {
                 logoutBtn.remove();
             }
+        }
+
+        // Atualiza breadcrumb (opcional)
+        const currentPageEl = document.getElementById('currentPage');
+        if (currentPageEl) {
+            const viewNames = {
+                dashboard: 'Dashboard',
+                pdv: 'PDV',
+                estoque: 'Estoque',
+                clientes: 'Clientes',
+                fidelidade: 'Fidelidade',
+                relatorios: 'Relatórios'
+            };
+            currentPageEl.textContent = viewNames[currentView] || currentView;
         }
     }
 
