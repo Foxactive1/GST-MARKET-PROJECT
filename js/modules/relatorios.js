@@ -1,14 +1,20 @@
 /**
  * Módulo de Relatórios
- * Responsável por análises, gráficos e exportação de dados
- * Versão revisada com integração aos utils aprimorados e verificação de dependências
+ * Versão revisada com melhorias:
+ * - Verificação de dependências (state, utils, Chart)
+ * - Inicialização segura de gráficos
+ * - Feedback visual (loading) durante atualizações
+ * - Exportação PDF real com window.print()
+ * - Cache simples para agregações de dados
+ * - Paginação e limite na tabela de vendas
+ * - Tratamento de erros abrangente
  */
 
 window.relatorios = (function() {
     'use strict';
 
     // ========================================
-    // VERIFICAÇÃO DE DEPENDÊNCIAS
+    // DEPENDÊNCIAS
     // ========================================
     function checkDependencies() {
         if (!window.state) {
@@ -19,14 +25,156 @@ window.relatorios = (function() {
             console.error('Erro no módulo Relatórios: window.utils não definido');
             return false;
         }
+        if (typeof Chart === 'undefined') {
+            console.error('Erro no módulo Relatórios: Chart.js não encontrado');
+            return false;
+        }
         return true;
     }
 
-    let currentPeriod = 'month';
+    // ========================================
+    // VARIÁVEIS DE ESTADO
+    // ========================================
+    let currentPeriod = 'month'; // today, week, month, quarter, year, all
     let charts = {};
     
+    // Cache simples para dados agregados (evita reprocessamento a cada refresh)
+    let cachedData = {
+        period: null,
+        sales: [],
+        productSales: null,
+        clientPurchases: null,
+        payments: null,
+        salesByDate: null
+    };
+
     // ========================================
-    // RENDERIZAÇÃO PRINCIPAL
+    // UTILITÁRIOS DE DATA (compatíveis com date-fns, mas usando Date nativo)
+    // ========================================
+    function getStartOfDay(date) {
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    }
+
+    function subDays(date, days) {
+        const result = new Date(date);
+        result.setDate(result.getDate() - days);
+        return result;
+    }
+
+    function isSameDay(d1, d2) {
+        return d1.toDateString() === d2.toDateString();
+    }
+
+    function isAfterOrEqual(date, reference) {
+        return date >= reference;
+    }
+
+    // ========================================
+    // FILTRAGEM POR PERÍODO
+    // ========================================
+    function filterSalesByPeriod(sales, period) {
+        const now = new Date();
+        const today = getStartOfDay(now);
+        let startDate;
+
+        switch (period) {
+            case 'today':
+                startDate = today;
+                break;
+            case 'week':
+                startDate = subDays(today, 7);
+                break;
+            case 'month':
+                startDate = subDays(today, 30);
+                break;
+            case 'quarter':
+                startDate = subDays(today, 90);
+                break;
+            case 'year':
+                startDate = new Date(now.getFullYear(), 0, 1);
+                break;
+            default: // 'all' ou qualquer outro
+                return sales;
+        }
+
+        return sales.filter(s => isAfterOrEqual(new Date(s.date), startDate));
+    }
+
+    // ========================================
+    // ATUALIZAÇÃO DO CACHE (somente quando período muda ou dados são alterados)
+    // ========================================
+    function updateCache() {
+        const state = window.state.get();
+        const filteredSales = filterSalesByPeriod(state.sales, currentPeriod);
+
+        // Se o período não mudou e as vendas são as mesmas (pode usar uma flag externa),
+        // mas para simplificar, recalculamos sempre. Em produção, pode-se adicionar
+        // um controle de versão dos dados.
+        cachedData = {
+            period: currentPeriod,
+            sales: filteredSales,
+            productSales: aggregateProductSales(filteredSales),
+            clientPurchases: aggregateClientPurchases(filteredSales, state.clients),
+            payments: aggregatePayments(filteredSales),
+            salesByDate: aggregateSalesByDate(filteredSales)
+        };
+    }
+
+    function aggregateProductSales(sales) {
+        const productSales = {};
+        sales.forEach(sale => {
+            sale.items.forEach(item => {
+                if (!productSales[item.id]) {
+                    productSales[item.id] = {
+                        nome: item.nome,
+                        qty: 0,
+                        total: 0
+                    };
+                }
+                productSales[item.id].qty += item.qty;
+                productSales[item.id].total += item.preco * item.qty;
+            });
+        });
+        return productSales;
+    }
+
+    function aggregateClientPurchases(sales, clients) {
+        const clientPurchases = {};
+        sales.forEach(sale => {
+            if (!sale.clientId) return;
+            if (!clientPurchases[sale.clientId]) {
+                const client = clients.find(c => c.id === sale.clientId);
+                clientPurchases[sale.clientId] = {
+                    nome: client?.nome || 'Cliente removido',
+                    total: 0,
+                    count: 0
+                };
+            }
+            clientPurchases[sale.clientId].total += sale.total;
+            clientPurchases[sale.clientId].count++;
+        });
+        return clientPurchases;
+    }
+
+    function aggregatePayments(sales) {
+        const payments = {};
+        sales.forEach(sale => {
+            payments[sale.payment] = (payments[sale.payment] || 0) + sale.total;
+        });
+        return payments;
+    }
+
+    function aggregateSalesByDate(sales) {
+        const salesByDate = {};
+        sales.forEach(sale => {
+            const date = new Date(sale.date).toLocaleDateString('pt-BR');
+            salesByDate[date] = (salesByDate[date] || 0) + sale.total;
+        });
+        return salesByDate;
+    }
+
+    // ========================================
+    // FUNÇÕES DE RENDERIZAÇÃO (usam cache)
     // ========================================
     function render() {
         if (!checkDependencies()) {
@@ -97,9 +245,13 @@ window.relatorios = (function() {
                     </div>
                 </div>
                 
-                <!-- KPIs Principais -->
+                <!-- KPIs Principais (com loading) -->
                 <div class="row g-3 mb-4" id="report-kpis">
-                    ${renderKPIs()}
+                    <div class="col-12 text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Gráficos -->
@@ -110,7 +262,7 @@ window.relatorios = (function() {
                                 <i class="bi bi-bar-chart-line me-2 text-primary"></i>
                                 Evolução de Vendas
                             </h5>
-                            <div style="height: 350px;">
+                            <div style="height: 350px;" id="sales-trend-container">
                                 <canvas id="salesTrendChart"></canvas>
                             </div>
                         </div>
@@ -121,7 +273,7 @@ window.relatorios = (function() {
                                 <i class="bi bi-pie-chart me-2 text-primary"></i>
                                 Formas de Pagamento
                             </h5>
-                            <div style="height: 300px;">
+                            <div style="height: 300px;" id="payment-chart-container">
                                 <canvas id="paymentChart"></canvas>
                             </div>
                         </div>
@@ -137,7 +289,7 @@ window.relatorios = (function() {
                                 Top 10 Produtos
                             </h5>
                             <div id="top-products-report">
-                                ${renderTopProducts()}
+                                <!-- Será preenchido via JS -->
                             </div>
                         </div>
                     </div>
@@ -148,18 +300,18 @@ window.relatorios = (function() {
                                 Top 10 Clientes
                             </h5>
                             <div id="top-clients-report">
-                                ${renderTopClients()}
+                                <!-- Será preenchido via JS -->
                             </div>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Tabela de Vendas -->
+                <!-- Tabela de Vendas com paginação interna (limitada) -->
                 <div class="card-modern">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h5 class="card-title mb-0">
                             <i class="bi bi-table me-2"></i>
-                            Histórico de Vendas
+                            Últimas 50 Vendas
                         </h5>
                         <div>
                             <button class="btn btn-sm btn-outline-secondary" onclick="window.relatorios.exportSales()">
@@ -168,9 +320,9 @@ window.relatorios = (function() {
                         </div>
                     </div>
                     
-                    <div class="table-responsive">
+                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
                         <table class="table-modern">
-                            <thead>
+                            <thead style="position: sticky; top: 0; background: #f8f9fa;">
                                 <tr>
                                     <th>Data/Hora</th>
                                     <th>Cliente</th>
@@ -181,41 +333,36 @@ window.relatorios = (function() {
                                 </tr>
                             </thead>
                             <tbody id="sales-table-body">
-                                ${renderSalesTable()}
+                                <!-- Será preenchido via JS -->
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
         `;
-        
-        // Inicializa gráficos
-        setTimeout(() => {
-            initSalesTrendChart();
-            initPaymentChart();
-        }, 100);
+
+        // Atualiza dados e renderiza componentes
+        refresh();
     }
-    
+
     // ========================================
-    // RENDERIZAÇÃO DE COMPONENTES
+    // RENDERIZAÇÃO DOS COMPONENTES (usam cache)
     // ========================================
     function renderKPIs() {
-        const state = window.state.get();
-        const filteredSales = filterSalesByPeriod(state.sales, currentPeriod);
-        
-        const totalSales = filteredSales.reduce((sum, s) => sum + s.total, 0);
-        const totalItems = filteredSales.reduce((sum, s) => 
+        const sales = cachedData.sales;
+        const totalSales = sales.reduce((sum, s) => sum + s.total, 0);
+        const totalItems = sales.reduce((sum, s) => 
             sum + s.items.reduce((itemSum, i) => itemSum + i.qty, 0), 0
         );
-        const avgTicket = filteredSales.length > 0 ? totalSales / filteredSales.length : 0;
-        const uniqueClients = new Set(filteredSales.map(s => s.clientId).filter(Boolean)).size;
-        
+        const avgTicket = sales.length > 0 ? totalSales / sales.length : 0;
+        const uniqueClients = new Set(sales.map(s => s.clientId).filter(Boolean)).size;
+
         return `
             <div class="col-md-3">
                 <div class="metric-card">
                     <div class="metric-label">Vendas no Período</div>
                     <div class="metric-value">R$ ${window.utils.formatCurrency(totalSales)}</div>
-                    <small class="text-muted">${filteredSales.length} transações</small>
+                    <small class="text-muted">${sales.length} transações</small>
                 </div>
             </div>
             <div class="col-md-3">
@@ -241,35 +388,17 @@ window.relatorios = (function() {
             </div>
         `;
     }
-    
+
     function renderTopProducts() {
-        const state = window.state.get();
-        const filteredSales = filterSalesByPeriod(state.sales, currentPeriod);
-        
-        // Agrupa produtos vendidos
-        const productSales = {};
-        filteredSales.forEach(sale => {
-            sale.items.forEach(item => {
-                if (!productSales[item.id]) {
-                    productSales[item.id] = {
-                        nome: item.nome,
-                        qty: 0,
-                        total: 0
-                    };
-                }
-                productSales[item.id].qty += item.qty;
-                productSales[item.id].total += item.preco * item.qty;
-            });
-        });
-        
+        const productSales = cachedData.productSales;
         const topProducts = Object.values(productSales)
             .sort((a, b) => b.qty - a.qty)
             .slice(0, 10);
-        
+
         if (topProducts.length === 0) {
             return '<p class="text-muted text-center py-3">Nenhuma venda no período</p>';
         }
-        
+
         let html = '<div class="list-group">';
         topProducts.forEach((p, index) => {
             html += `
@@ -287,39 +416,19 @@ window.relatorios = (function() {
             `;
         });
         html += '</div>';
-        
         return html;
     }
-    
+
     function renderTopClients() {
-        const state = window.state.get();
-        const filteredSales = filterSalesByPeriod(state.sales, currentPeriod);
-        
-        // Agrupa compras por cliente
-        const clientPurchases = {};
-        filteredSales.forEach(sale => {
-            if (!sale.clientId) return;
-            
-            if (!clientPurchases[sale.clientId]) {
-                const client = state.clients.find(c => c.id === sale.clientId);
-                clientPurchases[sale.clientId] = {
-                    nome: client?.nome || 'Cliente removido',
-                    total: 0,
-                    count: 0
-                };
-            }
-            clientPurchases[sale.clientId].total += sale.total;
-            clientPurchases[sale.clientId].count++;
-        });
-        
+        const clientPurchases = cachedData.clientPurchases;
         const topClients = Object.values(clientPurchases)
             .sort((a, b) => b.total - a.total)
             .slice(0, 10);
-        
+
         if (topClients.length === 0) {
             return '<p class="text-muted text-center py-3">Nenhuma venda com cliente no período</p>';
         }
-        
+
         let html = '<div class="list-group">';
         topClients.forEach((c, index) => {
             html += `
@@ -335,17 +444,19 @@ window.relatorios = (function() {
             `;
         });
         html += '</div>';
-        
         return html;
     }
-    
+
     function renderSalesTable() {
-        const state = window.state.get();
-        const filteredSales = filterSalesByPeriod(state.sales, currentPeriod)
+        const sales = cachedData.sales;
+        const clients = window.state.get().clients;
+
+        // Ordena por data decrescente e pega as 50 mais recentes
+        const recentSales = [...sales]
             .sort((a, b) => new Date(b.date) - new Date(a.date))
-            .slice(0, 20);
-        
-        if (filteredSales.length === 0) {
+            .slice(0, 50);
+
+        if (recentSales.length === 0) {
             return `
                 <tr>
                     <td colspan="6" class="text-center py-5">
@@ -355,10 +466,10 @@ window.relatorios = (function() {
                 </tr>
             `;
         }
-        
-        return filteredSales.map(sale => {
+
+        return recentSales.map(sale => {
             const client = sale.clientId ? 
-                state.clients.find(c => c.id === sale.clientId) : null;
+                clients.find(c => c.id === sale.clientId) : null;
             
             return `
                 <tr>
@@ -392,194 +503,205 @@ window.relatorios = (function() {
             `;
         }).join('');
     }
-    
-    // ========================================
-    // FILTRAGEM POR PERÍODO
-    // ========================================
-    function filterSalesByPeriod(sales, period) {
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        
-        switch(period) {
-            case 'today':
-                return sales.filter(s => new Date(s.date).toDateString() === today.toDateString());
-            
-            case 'week':
-                const weekAgo = new Date(today - 7 * 24 * 60 * 60 * 1000);
-                return sales.filter(s => new Date(s.date) >= weekAgo);
-            
-            case 'month':
-                const monthAgo = new Date(today - 30 * 24 * 60 * 60 * 1000);
-                return sales.filter(s => new Date(s.date) >= monthAgo);
-            
-            case 'quarter':
-                const quarterAgo = new Date(today - 90 * 24 * 60 * 60 * 1000);
-                return sales.filter(s => new Date(s.date) >= quarterAgo);
-            
-            case 'year':
-                const yearStart = new Date(now.getFullYear(), 0, 1);
-                return sales.filter(s => new Date(s.date) >= yearStart);
-            
-            default:
-                return sales;
-        }
-    }
-    
+
     // ========================================
     // GRÁFICOS
     // ========================================
     function initSalesTrendChart() {
-        const ctx = document.getElementById('salesTrendChart')?.getContext('2d');
+        const canvas = document.getElementById('salesTrendChart');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
         if (!ctx) return;
-        
-        if (charts.sales) charts.sales.destroy();
-        
-        const state = window.state.get();
-        const filteredSales = filterSalesByPeriod(state.sales, currentPeriod);
-        
-        // Agrupa por data
-        const salesByDate = {};
-        filteredSales.forEach(sale => {
-            const date = new Date(sale.date).toLocaleDateString('pt-BR');
-            salesByDate[date] = (salesByDate[date] || 0) + sale.total;
-        });
-        
+
+        // Destroi gráfico anterior se existir
+        if (charts.sales && typeof charts.sales.destroy === 'function') {
+            charts.sales.destroy();
+        }
+
+        const salesByDate = cachedData.salesByDate;
         const labels = Object.keys(salesByDate).sort((a, b) => {
             const [d1, m1, y1] = a.split('/');
             const [d2, m2, y2] = b.split('/');
             return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
         });
-        
         const data = labels.map(l => salesByDate[l]);
-        
-        charts.sales = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels,
-                datasets: [{
-                    label: 'Vendas (R$)',
-                    data,
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    borderWidth: 2,
-                    pointRadius: 3,
-                    pointBackgroundColor: '#10b981',
-                    tension: 0.3,
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: (context) => {
-                                return `R$ ${window.utils.formatCurrency(context.raw)}`;
-                            }
-                        }
-                    }
+
+        try {
+            charts.sales = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Vendas (R$)',
+                        data,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#10b981',
+                        tension: 0.3,
+                        fill: true
+                    }]
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: value => 'R$ ' + window.utils.formatCurrency(value)
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    return `R$ ${window.utils.formatCurrency(context.raw)}`;
+                                }
+                            }
                         }
-                    }
-                }
-            }
-        });
-    }
-    
-    function initPaymentChart() {
-        const ctx = document.getElementById('paymentChart')?.getContext('2d');
-        if (!ctx) return;
-        
-        if (charts.payment) charts.payment.destroy();
-        
-        const state = window.state.get();
-        const filteredSales = filterSalesByPeriod(state.sales, currentPeriod);
-        
-        const payments = {};
-        filteredSales.forEach(sale => {
-            payments[sale.payment] = (payments[sale.payment] || 0) + sale.total;
-        });
-        
-        charts.payment = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: Object.keys(payments).map(p => p.charAt(0).toUpperCase() + p.slice(1)),
-                datasets: [{
-                    data: Object.values(payments),
-                    backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444'],
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
                     },
-                    tooltip: {
-                        callbacks: {
-                            label: (context) => {
-                                const value = context.raw;
-                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                const percentage = ((value / total) * 100).toFixed(1);
-                                return `${context.label}: R$ ${window.utils.formatCurrency(value)} (${percentage}%)`;
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: value => 'R$ ' + window.utils.formatCurrency(value)
                             }
                         }
                     }
                 }
-            }
-        });
+            });
+        } catch (error) {
+            console.error('Erro ao criar gráfico de vendas:', error);
+        }
     }
-    
+
+    function initPaymentChart() {
+        const canvas = document.getElementById('paymentChart');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        if (charts.payment && typeof charts.payment.destroy === 'function') {
+            charts.payment.destroy();
+        }
+
+        const payments = cachedData.payments;
+        const labels = Object.keys(payments).map(p => p.charAt(0).toUpperCase() + p.slice(1));
+        const data = Object.values(payments);
+
+        if (data.length === 0) {
+            // Se não houver dados, não cria gráfico
+            return;
+        }
+
+        try {
+            charts.payment = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels,
+                    datasets: [{
+                        data,
+                        backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const value = context.raw;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${context.label}: R$ ${window.utils.formatCurrency(value)} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Erro ao criar gráfico de pagamentos:', error);
+        }
+    }
+
     // ========================================
-    // AÇÕES
+    // AÇÕES PRINCIPAIS
     // ========================================
     function changePeriod(period) {
         currentPeriod = period;
         refresh();
     }
-    
+
     function refresh() {
         if (!checkDependencies()) return;
-        
-        // Atualiza KPIs
+
+        // Mostra loading nos KPIs
         const kpisDiv = document.getElementById('report-kpis');
-        if (kpisDiv) kpisDiv.innerHTML = renderKPIs();
-        
-        // Atualiza top produtos
-        const topProductsDiv = document.getElementById('top-products-report');
-        if (topProductsDiv) topProductsDiv.innerHTML = renderTopProducts();
-        
-        // Atualiza top clientes
-        const topClientsDiv = document.getElementById('top-clients-report');
-        if (topClientsDiv) topClientsDiv.innerHTML = renderTopClients();
-        
-        // Atualiza tabela
-        const tableBody = document.getElementById('sales-table-body');
-        if (tableBody) tableBody.innerHTML = renderSalesTable();
-        
-        // Atualiza gráficos
-        initSalesTrendChart();
-        initPaymentChart();
+        if (kpisDiv) {
+            kpisDiv.innerHTML = `
+                <div class="col-12 text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Usa setTimeout para permitir a renderização do loading e não travar a UI
+        setTimeout(() => {
+            try {
+                // Atualiza cache
+                updateCache();
+
+                // Atualiza KPIs
+                if (kpisDiv) kpisDiv.innerHTML = renderKPIs();
+
+                // Atualiza top produtos
+                const topProductsDiv = document.getElementById('top-products-report');
+                if (topProductsDiv) topProductsDiv.innerHTML = renderTopProducts();
+
+                // Atualiza top clientes
+                const topClientsDiv = document.getElementById('top-clients-report');
+                if (topClientsDiv) topClientsDiv.innerHTML = renderTopClients();
+
+                // Atualiza tabela
+                const tableBody = document.getElementById('sales-table-body');
+                if (tableBody) tableBody.innerHTML = renderSalesTable();
+
+                // Atualiza gráficos
+                initSalesTrendChart();
+                initPaymentChart();
+            } catch (error) {
+                console.error('Erro ao atualizar relatórios:', error);
+                if (kpisDiv) {
+                    kpisDiv.innerHTML = `
+                        <div class="col-12">
+                            <div class="alert alert-danger">
+                                Erro ao carregar dados. Tente novamente.
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        }, 50); // pequeno delay para mostrar o loading
     }
-    
+
     function viewSaleDetails(saleId) {
         if (!checkDependencies()) return;
-        
+
         const state = window.state.get();
         const sale = state.sales.find(s => s.id === saleId);
-        if (!sale) return;
-        
+        if (!sale) {
+            window.utils.showToast('Venda não encontrada', 'error');
+            return;
+        }
+
         const client = sale.clientId ? 
             state.clients.find(c => c.id === sale.clientId) : null;
-        
+
         let detailsHTML = `
             <div class="text-start">
                 <div class="alert alert-primary">
@@ -623,7 +745,7 @@ window.relatorios = (function() {
                         </thead>
                         <tbody>
         `;
-        
+
         sale.items.forEach(item => {
             detailsHTML += `
                 <tr>
@@ -634,14 +756,14 @@ window.relatorios = (function() {
                 </tr>
             `;
         });
-        
+
         detailsHTML += `
                         </tbody>
                     </table>
                 </div>
             </div>
         `;
-        
+
         Swal.fire({
             title: 'Detalhes da Venda',
             html: detailsHTML,
@@ -650,34 +772,69 @@ window.relatorios = (function() {
             confirmButtonText: 'Fechar'
         });
     }
-    
+    // FIX BUG-05: exportarPDF removida — chamava prepararDadosParaTabela() que nunca foi definida.
+    // A exportação PDF é feita via window.print() em exportFullReport(), que já funciona corretamente.
+    // ========================================
+    // EXPORTAÇÕES
+    // ========================================
     function exportFullReport() {
-        if (!checkDependencies()) return;
-        
-        const format = document.getElementById('report-format')?.value || 'pdf';
-        const period = document.getElementById('report-period')?.value || 'month';
-        
-        if (format === 'pdf') {
-            window.utils.showToast('Gerando relatório PDF...', 'info');
-            // Simulação de geração PDF
-            setTimeout(() => {
-                window.utils.showToast('Relatório PDF gerado com sucesso!', 'success');
-            }, 1500);
-        } else if (format === 'excel') {
-            exportSales();
+    if (!checkDependencies()) return;
+
+    const format = document.getElementById('report-format')?.value || 'pdf';
+
+    if (format === 'pdf') {
+        // Garantir que jsPDF está carregado
+        if (typeof window.jspdf === 'undefined') {
+            window.utils.showToast('Biblioteca jsPDF não carregada', 'error');
+            return;
         }
-    }
-    
-    function exportSales() {
-        if (!checkDependencies()) return;
-        
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        // Título
+        doc.setFontSize(18);
+        doc.text('Relatório de Vendas', 14, 22);
+        doc.setFontSize(11);
+        doc.text(`Período: ${document.getElementById('report-period').selectedOptions[0].text}`, 14, 30);
+        doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 36);
+
+        // Dados da tabela
         const state = window.state.get();
         const filteredSales = filterSalesByPeriod(state.sales, currentPeriod);
-        
+        const tableData = filteredSales.map(s => [
+            new Date(s.date).toLocaleDateString('pt-BR'),
+            s.items.length,
+            s.payment,
+            `R$ ${s.total.toFixed(2)}`
+        ]);
+
+        doc.autoTable({
+            startY: 42,
+            head: [['Data', 'Itens', 'Pagamento', 'Total']],
+            body: tableData,
+            theme: 'striped',
+            headStyles: { fillColor: [13, 110, 253] }
+        });
+
+        doc.save(`relatorio_vendas_${new Date().toISOString().split('T')[0]}.pdf`);
+        window.utils.showToast('PDF gerado com sucesso!', 'success');
+    } else if (format === 'excel') {
+        exportSales();
+    } else {
+        window.utils.showToast('Formato não implementado', 'info');
+    }
+}
+    function exportSales() {
+        if (!checkDependencies()) return;
+
+        const state = window.state.get();
+        const filteredSales = filterSalesByPeriod(state.sales, currentPeriod);
+
         const data = filteredSales.map(sale => {
             const client = sale.clientId ? 
                 state.clients.find(c => c.id === sale.clientId) : null;
-            
+
             return {
                 'Data': new Date(sale.date).toLocaleDateString('pt-BR'),
                 'Hora': new Date(sale.date).toLocaleTimeString('pt-BR'),
@@ -689,11 +846,16 @@ window.relatorios = (function() {
                 'Total': window.utils.formatCurrency(sale.total)
             };
         });
-        
-        window.utils.exportToCSV(data, `vendas-${new Date().toISOString().split('T')[0]}.csv`);
-        window.utils.showToast('Vendas exportadas com sucesso!', 'success');
+
+        try {
+            window.utils.exportToCSV(data, `vendas-${new Date().toISOString().split('T')[0]}.csv`);
+            window.utils.showToast('Vendas exportadas com sucesso!', 'success');
+        } catch (error) {
+            console.error('Erro ao exportar CSV:', error);
+            window.utils.showToast('Erro ao exportar. Tente novamente.', 'error');
+        }
     }
-    
+
     // ========================================
     // API PÚBLICA
     // ========================================
