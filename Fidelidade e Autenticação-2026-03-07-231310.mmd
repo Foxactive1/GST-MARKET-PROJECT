@@ -1,0 +1,185 @@
+classDiagram
+    class Pessoa {
+        #id: int
+        #nome: string
+        #telefone: string
+        #email: string
+    }
+
+    class Cliente {
+        -cpf: string
+        -dataNascimento: Date
+        -pontosFidelidade: double
+        -nivelFidelidade: string
+        -dataRegistro: Date
+        +acumularPontos(double)
+        +resgatarPontos(double)
+        +consultarSaldo(): double
+        +obterHistoricoCompras(): ItemVenda[]
+    }
+
+    class Funcionario {
+        -matricula: string
+        -cargo: string
+        -usuario: string
+        -senhaHash: string
+        -permissoes: string[]
+        -ativo: boolean
+        +autenticar(string, string): boolean
+        +verificarPermissao(string): boolean
+    }
+
+    class Produto {
+        -id: int
+        -codigoBarras: string
+        -nome: string
+        -descricao: string
+        -precoCusto: double
+        -precoVenda: double
+        -quantidadeEstoque: int
+        -estoqueMinimo: int
+        -validade: Date
+        -categoria: Categoria
+        -fornecedor: Fornecedor
+        +atualizarEstoque(int)
+        +verificarDisponibilidade(int): boolean
+        +calcularMargemLucro(): double
+        +verificarEstoqueBaixo(): boolean
+    }
+
+    class Categoria {
+        -id: int
+        -nome: string
+        -descricao: string
+        -ativa: boolean
+        +listarProdutos(): Produto[]
+    }
+
+    class Fornecedor {
+        -id: int
+        -nome: string
+        -cnpj: string
+        -telefone: string
+        -email: string
+        -endereco: string
+        -ativo: boolean
+        +obterProdutos(): Produto[]
+        +enviarPedido(Produto[], int): Pedido
+    }
+
+    class MovimentoEstoque {
+        -id: int
+        -produto: Produto
+        -tipo: string
+        -quantidade: int
+        -dataHora: DateTime
+        -observacao: string
+        -funcionario: Funcionario
+        +registrarMovimento()
+        +obterDescricao(): string
+    }
+
+    class Venda {
+        -id: int
+        -dataHora: DateTime
+        -cliente: Cliente
+        -funcionario: Funcionario
+        -itens: ItemVenda[]
+        -valorTotal: double
+        -valorDesconto: double
+        -formaPagamento: string
+        -status: string
+        +adicionarItem(Produto, int)
+        +removerItem(ItemVenda)
+        +calcularTotal(): double
+        +aplicarDesconto(double)
+        +processarPagamento(string, double): boolean
+        +finalizarVenda()
+        +cancelarVenda(string)
+    }
+
+    class ItemVenda {
+        -id: int
+        -venda: Venda
+        -produto: Produto
+        -quantidade: int
+        -precoUnitario: double
+        -subtotal: double
+        +calcularSubtotal(): double
+        +ajustarQuantidade(int)
+    }
+
+    class CupomFiscal {
+        -id: int
+        -venda: Venda
+        -codigoCupom: string
+        -dataEmissao: DateTime
+        -xml: string
+        -numero: string
+        +gerarCupom(): string
+        +imprimirCupom()
+        +enviarParaFiscal()
+        +obterXml(): string
+    }
+
+    class Recompensa {
+        -id: int
+        -nome: string
+        -descricao: string
+        -pontosNecessarios: double
+        -validade: Date
+        -ativa: boolean
+        +verificarDisponibilidade(): boolean
+        +obterDesconto(): double
+    }
+
+    class Resgate {
+        -id: int
+        -cliente: Cliente
+        -recompensa: Recompensa
+        -dataResgate: DateTime
+        -pontosUtilizados: double
+        -status: string
+        +validarResgate(): boolean
+        +confirmarResgate()
+        +cancelarResgate(string)
+    }
+
+    class Relatorio {
+        -id: int
+        -tipo: string
+        -dataInicio: Date
+        -dataFim: Date
+        -geradoEm: DateTime
+        +gerarRelatorioVendas(): Relatorio
+        +gerarRelatorioProdutos(): Relatorio
+        +gerarRelatorioMargens(): Relatorio
+        +exportarPDF(): string
+        +exportarExcel(): string
+    }
+
+    class Log {
+        -id: int
+        -usuario: string
+        -acao: string
+        -tabela: string
+        -dataHora: DateTime
+        -detalhes: string
+        +registrarAcao(string, string, string)
+    }
+
+    Pessoa <|-- Funcionario
+    Produto "1" --> "1" Categoria
+    Produto "1" --> "1" Fornecedor
+    Categoria "1" <-- "*" Produto
+    Fornecedor "1" <-- "*" Produto
+    MovimentoEstoque "*" --> "1" Produto
+    MovimentoEstoque "*" --> "1" Funcionario
+    Venda "1" --> "1" Funcionario
+    Venda "*" --> "0..1" Cliente
+    Venda "1" *-- "*" ItemVenda
+    ItemVenda "*" --> "1" Produto
+    CupomFiscal "1" --> "1" Venda
+    Resgate "*" --> "1" Cliente
+    Resgate "*" --> "1" Recompensa
+    Cliente "1" <-- "*" Resgate
