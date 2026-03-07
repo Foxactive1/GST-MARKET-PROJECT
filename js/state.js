@@ -1,11 +1,5 @@
 /**
- * Estado Centralizado — Versão Aprimorada
- * Agora com:
- * - Persistência com debounce (agrupa alterações)
- * - Retorno de estado congelado (Object.freeze) para evitar mutações acidentais
- * - Listeners notificados apenas após gravação efetiva
- * - Backup automático melhorado (mantém últimos 7 dias)
- * - Métodos de atualização mais seguros
+ * Estado Centralizado — Versão com suporte a fornecedores e migração segura
  */
 window.state = (function() {
     'use strict';
@@ -16,6 +10,7 @@ window.state = (function() {
     var initialState = {
         products: [],
         clients: [],
+        suppliers: [],          // ← NOVO: array de fornecedores
         sales: [],
         saldo: 0,
         fidelity: {
@@ -40,10 +35,19 @@ window.state = (function() {
     };
 
     // ========================================
-    // CARREGAR ESTADO SALVO
+    // CARREGAR ESTADO SALVO + MIGRAÇÃO
     // ========================================
     var savedState = localStorage.getItem('supermarket-state');
     var state = savedState ? JSON.parse(savedState) : JSON.parse(JSON.stringify(initialState));
+
+    // Garantir que todas as propriedades do estado inicial existam (migração)
+    // Isso evita undefined em versões antigas sem 'suppliers'
+    state = {
+        ...JSON.parse(JSON.stringify(initialState)),
+        ...state,
+        suppliers: state.suppliers || []  // força ser array
+    };
+
     var listeners = [];
 
     // ========================================
@@ -78,7 +82,7 @@ window.state = (function() {
     }
 
     // ========================================
-    // BACKUP AUTOMÁTICO (mantém últimos 7 dias)
+    // BACKUP AUTOMÁTICO
     // ========================================
     function autoBackup() {
         if (!state.backup.autoBackup) return;
@@ -88,12 +92,12 @@ window.state = (function() {
             var backupKey = 'backup-' + new Date().toISOString().split('T')[0];
             localStorage.setItem(backupKey, JSON.stringify(state));
             state.backup.lastBackup = new Date().toISOString();
-            persist(); // salva a data do backup
+            persist();
         }
     }
 
     // ========================================
-    // GERADORES (fallback caso window.utils não exista)
+    // GERADORES DE ID
     // ========================================
     function generateId() {
         if (window.utils && typeof window.utils.generateId === 'function') {
@@ -115,43 +119,46 @@ window.state = (function() {
     }
 
     // ========================================
-    // RETORNA UMA CÓPIA CONGELADA (imutável) DO ESTADO
+    // RETORNA UMA CÓPIA CONGELADA
     // ========================================
     function getReadOnlyState() {
-        // Cria cópia profunda e congela
         var copy = JSON.parse(JSON.stringify(state));
         return Object.freeze(copy);
     }
 
     // ========================================
-    // MÉTODOS DE ACESSO (retornam cópias imutáveis)
+    // MÉTODOS DE ACESSO (SEMPRE RETORNAM ARRAY)
     // ========================================
     function get() {
         return getReadOnlyState();
     }
 
     function getProducts() {
-        return state.products.slice(); // cópia rasa, mas como objetos são simples, ok
+        return state.products ? state.products.slice() : [];
     }
 
     function getClients() {
-        return state.clients.slice();
+        return state.clients ? state.clients.slice() : [];
+    }
+
+    function getSuppliers() {
+        return state.suppliers ? state.suppliers.slice() : [];  // ← seguro
     }
 
     function getSales() {
-        return state.sales.slice();
+        return state.sales ? state.sales.slice() : [];
     }
 
     function getFidelity() {
-        return JSON.parse(JSON.stringify(state.fidelity));
+        return JSON.parse(JSON.stringify(state.fidelity || {}));
     }
 
     function getSaldo() {
-        return state.saldo;
+        return state.saldo || 0;
     }
 
     // ========================================
-    // MÉTODOS DE MODIFICAÇÃO (sempre passam por persist)
+    // MÉTODOS DE MODIFICAÇÃO
     // ========================================
     function addProduct(product) {
         product.id = generateId();
@@ -165,7 +172,6 @@ window.state = (function() {
     function updateProduct(id, updates) {
         var index = state.products.findIndex(function(p) { return p.id === id; });
         if (index !== -1) {
-            // Substitui as propriedades, mas mantém as que não foram passadas
             state.products[index] = { ...state.products[index], ...updates };
             persist();
             return true;
@@ -204,6 +210,36 @@ window.state = (function() {
         persist();
     }
 
+    // ========================================
+    // MÉTODOS PARA FORNECEDORES (NOVOS)
+    // ========================================
+    function addSupplier(supplier) {
+        supplier.id = generateId();
+        supplier.createdAt = new Date().toISOString();
+        if (!state.suppliers) state.suppliers = [];
+        state.suppliers.push(supplier);
+        persist();
+        return supplier.id;
+    }
+
+    function updateSupplier(id, updates) {
+        var index = state.suppliers.findIndex(function(s) { return s.id === id; });
+        if (index !== -1) {
+            state.suppliers[index] = { ...state.suppliers[index], ...updates };
+            persist();
+            return true;
+        }
+        return false;
+    }
+
+    function deleteSupplier(id) {
+        state.suppliers = state.suppliers.filter(function(s) { return s.id !== id; });
+        persist();
+    }
+
+    // ========================================
+    // VENDAS
+    // ========================================
     function addSale(sale) {
         sale.id = generateId();
         sale.date = sale.date || new Date().toISOString();
@@ -251,6 +287,16 @@ window.state = (function() {
                 this.addClient(clientes[j]);
             }
         }
+        // Fornecedores de exemplo
+        if (state.suppliers.length === 0) {
+            var fornecedores = [
+                { nome: 'Distribuidora Alimentos Ltda', cnpj: '12.345.678/0001-90', fone: '(11) 3333-4444', email: 'contato@distribuidora.com', contato: 'Carlos' },
+                { nome: 'Bebidas Puras S.A.', cnpj: '98.765.432/0001-21', fone: '(11) 4444-5555', email: 'vendas@bebidas.com', contato: 'Ana' }
+            ];
+            for (var k = 0; k < fornecedores.length; k++) {
+                this.addSupplier(fornecedores[k]);
+            }
+        }
     }
 
     // ========================================
@@ -258,7 +304,6 @@ window.state = (function() {
     // ========================================
     function subscribe(listener) {
         listeners.push(listener);
-        // Retorna função para cancelar inscrição
         return function() {
             var idx = listeners.indexOf(listener);
             if (idx !== -1) listeners.splice(idx, 1);
@@ -272,6 +317,7 @@ window.state = (function() {
         get: get,
         getProducts: getProducts,
         getClients: getClients,
+        getSuppliers: getSuppliers,
         getSales: getSales,
         getFidelity: getFidelity,
         getSaldo: getSaldo,
@@ -281,6 +327,9 @@ window.state = (function() {
         addClient: addClient,
         updateClient: updateClient,
         deleteClient: deleteClient,
+        addSupplier: addSupplier,
+        updateSupplier: updateSupplier,
+        deleteSupplier: deleteSupplier,
         addSale: addSale,
         updateFidelity: updateFidelity,
         resetToInitial: resetToInitial,
