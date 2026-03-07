@@ -10,7 +10,7 @@
 
 **Sistema completo de gestão para supermercados com PDV, controle de estoque, programa de fidelidade e relatórios em tempo real.**
 
-[Demo](https://supermercado-pro-demo.netlify.app) · [Documentação](https://github.com/Foxactive1/supermercado-pro/wiki) · [Reportar Bug](https://github.com/Foxactive1/supermercado-pro/issues) · [Solicitar Feature](https://github.com/Foxactive1/supermercado-pro/issues)
+[Demo]([https://supermercado-pro-demo.netlify.app](https://gst-market-project.vercel.app/)) · [Documentação](https://github.com/Foxactive1/supermercado-pro/wiki) · [Reportar Bug](https://github.com/Foxactive1/supermercado-pro/issues) · [Solicitar Feature](https://github.com/Foxactive1/supermercado-pro/issues)
 
 </div>
 
