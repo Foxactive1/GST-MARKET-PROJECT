@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * MÓDULO DE GESTÃO DE ESTOQUE - VERSÃO REVISADA 2.1.0
+ * MÓDULO DE GESTÃO DE ESTOQUE - VERSÃO REVISADA 2.1.0 + INTELIGENTE
  * ============================================================================
  * 
  * Responsável por:
@@ -11,15 +11,10 @@
  * - Geração de códigos de barras
  * - Análise de giro de estoque
  * - Relatórios e dashboards
- * 
- * Melhorias v2.1.0:
- * - Integração com utils aprimorados (formatCurrency, parseMonetaryValue, máscaras)
- * - Uso correto dos métodos de atualização do state (imutabilidade)
- * - Verificação de dependências no início
- * - Máscaras de moeda nos inputs
+ * - **ESTOQUE INTELIGENTE** com previsão de demanda, ponto de reposição e EOQ
  * 
  * @author Dione Castro Alves - InNovaIdeia
- * @version 2.1.0
+ * @version 2.2.0
  * @date 2026
  */
 
@@ -151,6 +146,11 @@ window.estoque = (function() {
                 </div>
                 
                 <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-info" 
+                            onclick="window.estoque.showSmartReplenishment()"
+                            title="Reposição inteligente baseada em demanda">
+                        <i class="bi bi-cpu"></i> Reposição Inteligente
+                    </button>
                     <button class="btn btn-success" 
                             onclick="window.estoque.importProducts()"
                             title="Importar produtos via CSV">
@@ -376,6 +376,10 @@ window.estoque = (function() {
                             <button class="btn btn-sm btn-warning" 
                                     onclick="window.estoque.generateReplenishmentOrder()">
                                 <i class="bi bi-cart-plus"></i> Gerar Pedido de Reposição
+                            </button>
+                            <button class="btn btn-sm btn-info ms-2"
+                                    onclick="window.estoque.showSmartReplenishment()">
+                                <i class="bi bi-cpu"></i> Reposição Inteligente
                             </button>
                         </div>
                     </div>
@@ -920,7 +924,6 @@ window.estoque = (function() {
                 const preview = document.getElementById('new-stock-preview');
                 const previewValue = document.getElementById('preview-value');
                 
-                // Preview em tempo real
                 function updatePreview() {
                     const type = typeSelect.value;
                     const qty = parseInt(qtyInput.value) || 0;
@@ -945,7 +948,6 @@ window.estoque = (function() {
                         preview.style.display = 'block';
                         previewValue.textContent = `${newQty} ${product.unit || 'un'}`;
                         
-                        // Cor do preview baseado no status
                         if (newQty === 0) {
                             previewValue.className = 'h4 mb-0 mt-2 text-danger';
                         } else if (newQty <= (product.minStock || 5)) {
@@ -960,8 +962,6 @@ window.estoque = (function() {
                 
                 typeSelect.addEventListener('change', updatePreview);
                 qtyInput.addEventListener('input', updatePreview);
-                
-                // Focus no input de quantidade
                 qtyInput.focus();
             },
             preConfirm: () => {
@@ -969,7 +969,6 @@ window.estoque = (function() {
                 const qty = parseInt(document.getElementById('movement-qty').value);
                 const obs = document.getElementById('movement-obs').value.trim();
                 
-                // Validação
                 if (isNaN(qty) || qty <= 0) {
                     Swal.showValidationMessage('Por favor, informe uma quantidade válida');
                     return false;
@@ -997,7 +996,6 @@ window.estoque = (function() {
         let newQty = oldQty;
         let movementType = '';
         
-        // Calcula novo estoque
         switch(type) {
             case 'add':
                 newQty += qty;
@@ -1021,11 +1019,9 @@ window.estoque = (function() {
                 break;
         }
         
-        // Atualiza produto (imutabilidade)
         const updatedProduct = { ...product, qtd: newQty };
         window.state.updateProduct(product.id, updatedProduct);
         
-        // Registra movimentação no histórico
         recordMovement({
             productId: product.id,
             productName: product.nome,
@@ -1035,10 +1031,9 @@ window.estoque = (function() {
             newStock: newQty,
             reason: obs || getDefaultReason(type),
             date: new Date().toISOString(),
-            user: 'Sistema' // Pode ser substituído por usuário logado
+            user: 'Sistema'
         });
         
-        // Feedback
         const difference = newQty - oldQty;
         const icon = difference > 0 ? 'arrow-up-circle' : difference < 0 ? 'arrow-down-circle' : 'dash-circle';
         const color = difference > 0 ? 'success' : difference < 0 ? 'warning' : 'info';
@@ -1048,7 +1043,6 @@ window.estoque = (function() {
             color
         );
         
-        // Recarrega módulo
         window.estoque.render();
     }
     
@@ -1071,12 +1065,9 @@ window.estoque = (function() {
         try {
             const history = getMovementHistory();
             history.push(movement);
-            
-            // Mantém apenas os últimos 1000 registros
             if (history.length > 1000) {
                 history.splice(0, history.length - 1000);
             }
-            
             localStorage.setItem('stock-movements', JSON.stringify(history));
         } catch (error) {
             console.error('Erro ao registrar movimentação:', error);
@@ -1086,11 +1077,9 @@ window.estoque = (function() {
     function getMovementHistory(productId = null) {
         try {
             const history = JSON.parse(localStorage.getItem('stock-movements') || '[]');
-            
             if (productId) {
                 return history.filter(m => m.productId === productId);
             }
-            
             return history;
         } catch (error) {
             console.error('Erro ao carregar histórico:', error);
@@ -1099,7 +1088,6 @@ window.estoque = (function() {
     }
     
     function loadMovementHistory() {
-        // Carrega histórico na inicialização (pode ser usado para análises)
         const history = getMovementHistory();
         console.log(`Histórico de movimentações carregado: ${history.length} registros`);
     }
@@ -1120,7 +1108,6 @@ window.estoque = (function() {
         
         let historyHTML = `
             <div class="text-start">
-                <!-- Info do produto -->
                 <div class="alert alert-primary">
                     <h6 class="mb-2">${product.nome}</h6>
                     <div class="row g-2 small">
@@ -1139,7 +1126,6 @@ window.estoque = (function() {
                     </div>
                 </div>
                 
-                <!-- Tabs -->
                 <ul class="nav nav-tabs mb-3" role="tablist">
                     <li class="nav-item">
                         <a class="nav-link active" data-bs-toggle="tab" href="#movements-tab">
@@ -1154,7 +1140,6 @@ window.estoque = (function() {
                 </ul>
                 
                 <div class="tab-content">
-                    <!-- Tab Movimentações -->
                     <div class="tab-pane fade show active" id="movements-tab">
         `;
         
@@ -1168,7 +1153,6 @@ window.estoque = (function() {
                     'devolucao': { icon: 'arrow-counterclockwise', color: 'primary' },
                     'perda': { icon: 'x-circle', color: 'danger' }
                 };
-                
                 const typeInfo = typeIcons[m.type] || { icon: 'circle', color: 'secondary' };
                 
                 historyHTML += `
@@ -1207,8 +1191,6 @@ window.estoque = (function() {
         
         historyHTML += `
                     </div>
-                    
-                    <!-- Tab Vendas -->
                     <div class="tab-pane fade" id="sales-tab">
         `;
         
@@ -1278,7 +1260,6 @@ window.estoque = (function() {
             return;
         }
         
-        // Agrupa por produto
         const groupedByProduct = {};
         movements.forEach(m => {
             if (!groupedByProduct[m.productId]) {
@@ -1365,15 +1346,191 @@ window.estoque = (function() {
     }
     
     // ========================================
+    // FUNÇÕES DE ESTOQUE INTELIGENTE
+    // ========================================
+    
+    /**
+     * Calcula a média de vendas diárias de um produto nos últimos 'days' dias.
+     * @param {string} productId
+     * @param {number} days - padrão 30
+     * @returns {number}
+     */
+    function getAverageDailySales(productId, days = 30) {
+        const sales = window.state.getSales();
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - days);
+
+        let totalQty = 0;
+        sales.forEach(sale => {
+            const saleDate = new Date(sale.date);
+            if (saleDate >= cutoff) {
+                sale.items.forEach(item => {
+                    if (item.id === productId) totalQty += item.qty;
+                });
+            }
+        });
+        return totalQty / days;
+    }
+
+    /**
+     * Calcula o ponto de reposição (ROP) para um produto.
+     * ROP = (demanda média diária * leadTime) + estoqueSegurança
+     * @param {Object} product
+     * @returns {number}
+     */
+    function calculateReorderPoint(product) {
+        const avgDaily = getAverageDailySales(product.id);
+        const leadTime = product.leadTime || 3;
+        const safety = product.safetyStock || (avgDaily * leadTime * 0.2); // 20% do consumo no lead time
+        return Math.ceil(avgDaily * leadTime + safety);
+    }
+
+    /**
+     * Calcula a quantidade econômica de pedido (EOQ) para um produto.
+     * EOQ = √(2 * DemandaAnual * CustoPedido / CustoArmazenagemAnual)
+     * @param {Object} product
+     * @returns {number|null}
+     */
+    function calculateEOQ(product) {
+        const annualDemand = getAverageDailySales(product.id) * 365;
+        const orderCost = product.orderCost || 10;
+        const holdingCost = (product.holdingCost || 0.1) * 365; // converte para anual
+        if (holdingCost <= 0 || annualDemand <= 0) return null;
+        return Math.sqrt((2 * annualDemand * orderCost) / holdingCost);
+    }
+
+    /**
+     * Gera uma lista de produtos que precisam ser repostos, com sugestões de quantidade.
+     * Agrupa por fornecedor.
+     * @returns {Object} where keys are supplierIds (or 'sem-fornecedor') and values are arrays of products with suggested quantity.
+     */
+    function generateSmartReplenishment() {
+        const products = window.state.getProducts();
+        const result = {};
+
+        products.forEach(p => {
+            const rop = calculateReorderPoint(p);
+            if (p.qtd <= rop) {
+                const avgDaily = getAverageDailySales(p.id);
+                const eoq = calculateEOQ(p);
+                let suggested = eoq ? eoq : Math.ceil(rop - p.qtd + avgDaily * (p.leadTime || 3));
+                suggested = Math.max(Math.round(suggested), 1);
+
+                const supplierKey = p.supplierId || 'sem-fornecedor';
+                if (!result[supplierKey]) result[supplierKey] = [];
+                result[supplierKey].push({
+                    ...p,
+                    rop,
+                    suggested,
+                    avgDaily,
+                    eoq: eoq ? Math.round(eoq) : null
+                });
+            }
+        });
+
+        return result;
+    }
+
+    /**
+     * Exibe um modal com a lista de produtos a repor, permitindo exportar pedido.
+     */
+    function showSmartReplenishment() {
+        const bySupplier = generateSmartReplenishment();
+        const supplierCount = Object.keys(bySupplier).length;
+
+        if (supplierCount === 0) {
+            window.utils.showAlert('Estoque OK', 'success', 'Nenhum produto precisa de reposição no momento.');
+            return;
+        }
+
+        let html = '<div class="text-start">';
+        for (const [supplierId, items] of Object.entries(bySupplier)) {
+            const supplierName = supplierId === 'sem-fornecedor' ? 'Sem fornecedor' : 
+                (window.state.getSuppliers().find(s => s.id === supplierId)?.nome || supplierId);
+            
+            html += `
+                <div class="card-modern mb-3 p-3">
+                    <h6 class="mb-3"><i class="bi bi-truck"></i> ${supplierName}</h6>
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>Produto</th>
+                                <th>Estoque</th>
+                                <th>Mínimo</th>
+                                <th>ROP</th>
+                                <th>Média/dia</th>
+                                <th>Sugerido</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            items.forEach(p => {
+                html += `
+                    <tr>
+                        <td>${p.nome}</td>
+                        <td>${p.qtd} ${p.unit || 'un'}</td>
+                        <td>${p.minStock || 5}</td>
+                        <td>${p.rop}</td>
+                        <td>${p.avgDaily.toFixed(2)}</td>
+                        <td class="fw-bold text-success">${p.suggested}</td>
+                    </tr>
+                `;
+            });
+            html += '</tbody></table></div>';
+        }
+        html += '</div>';
+
+        Swal.fire({
+            title: '<i class="bi bi-cpu"></i> Reposição Inteligente',
+            html: html,
+            width: '800px',
+            showCancelButton: true,
+            confirmButtonText: '<i class="bi bi-download"></i> Exportar Pedidos',
+            cancelButtonText: 'Fechar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                exportPurchaseOrder(bySupplier);
+            }
+        });
+    }
+
+    /**
+     * Exporta pedidos de compra agrupados por fornecedor em um arquivo CSV.
+     * @param {Object} bySupplier - resultado de generateSmartReplenishment
+     */
+    function exportPurchaseOrder(bySupplier) {
+        const data = [];
+        for (const [supplierId, items] of Object.entries(bySupplier)) {
+            const supplierName = supplierId === 'sem-fornecedor' ? 'Sem fornecedor' : 
+                (window.state.getSuppliers().find(s => s.id === supplierId)?.nome || supplierId);
+            
+            items.forEach(p => {
+                data.push({
+                    'Fornecedor': supplierName,
+                    'Código': p.code || '',
+                    'Produto': p.nome,
+                    'Quantidade Sugerida': p.suggested,
+                    'Unidade': p.unit || 'UN',
+                    'Estoque Atual': p.qtd,
+                    'Ponto de Reposição': p.rop,
+                    'Média Diária': p.avgDaily.toFixed(2),
+                    'Preço Unitário (R$)': p.cost ? p.cost.toFixed(2) : p.preco.toFixed(2),
+                    'Valor Total (R$)': ((p.cost || p.preco) * p.suggested).toFixed(2)
+                });
+            });
+        }
+        window.utils.exportToCSV(data, `pedido-inteligente-${new Date().toISOString().split('T')[0]}.csv`);
+        window.utils.showToast('Pedidos exportados!', 'success');
+    }
+    
+    // ========================================
     // ALERTAS AUTOMÁTICOS
     // ========================================
     
     function startAlertMonitoring() {
-        // Verifica alertas imediatamente
         const products = window.state.getProducts();
         checkStockAlerts(products);
         
-        // Configura verificação periódica
         if (alertCheckInterval) {
             clearInterval(alertCheckInterval);
         }
@@ -1387,7 +1544,6 @@ window.estoque = (function() {
     function checkStockAlerts(products) {
         const now = Date.now();
         
-        // Evita verificações muito frequentes
         if (lastAlertCheck && (now - lastAlertCheck) < ALERT_CONFIG.checkInterval) {
             return;
         }
@@ -1399,7 +1555,6 @@ window.estoque = (function() {
             p.qtd > 0 && p.qtd <= (p.minStock || 5)
         );
         
-        // Salva alertas no localStorage
         const alerts = {
             timestamp: now,
             critical: criticalProducts.map(p => ({
@@ -1417,7 +1572,6 @@ window.estoque = (function() {
         
         localStorage.setItem('stock-alerts', JSON.stringify(alerts));
         
-        // Notifica se houver novos produtos críticos
         const previousAlerts = JSON.parse(localStorage.getItem('stock-alerts-previous') || '{"critical":[],"lowStock":[]}');
         
         const newCritical = criticalProducts.filter(p => 
@@ -1521,7 +1675,6 @@ window.estoque = (function() {
                     return;
                 }
                 
-                // Remove header
                 const header = lines.shift();
                 
                 let imported = 0;
@@ -1539,7 +1692,6 @@ window.estoque = (function() {
                         
                         const [nome, code, categoria, qtd, preco, minStock, unit] = values;
                         
-                        // Verifica se produto existe
                         const existing = window.state.getProducts().find(p => 
                             p.code && code && p.code.toLowerCase() === code.toLowerCase()
                         );
@@ -1567,7 +1719,6 @@ window.estoque = (function() {
                     }
                 });
                 
-                // Resultado
                 let resultHTML = `
                     <div class="text-start">
                         <div class="alert alert-success">
@@ -1597,7 +1748,6 @@ window.estoque = (function() {
                     icon: errors.length > 0 ? 'warning' : 'success'
                 });
                 
-                // Recarrega módulo
                 window.estoque.render();
                 
             } catch (error) {
@@ -1722,7 +1872,6 @@ window.estoque = (function() {
             return;
         }
         
-        // Gera código de barras em ASCII art (simplificado)
         const barcodeArt = generateBarcodeASCII(product.code);
         
         Swal.fire({
@@ -1756,16 +1905,12 @@ ${barcodeArt}
     }
     
     function generateBarcodeASCII(code) {
-        // Geração simplificada de código de barras em ASCII
         const lines = [];
-        
-        // Linha superior
         lines.push('█ █ ████ █ █ █ ██ ███ █ ██ █ █ ████');
         lines.push('█ █ ████ █ █ █ ██ ███ █ ██ █ █ ████');
         lines.push('█ █ ████ █ █ █ ██ ███ █ ██ █ █ ████');
         lines.push('█ █ ████ █ █ █ ██ ███ █ ██ █ █ ████');
         lines.push('█ █ ████ █ █ █ ██ ███ █ ██ █ █ ████');
-        
         return lines.join('\n');
     }
     
@@ -2079,12 +2224,10 @@ ${barcodeArt}
     }
     
     function initializeComponents() {
-        // Inicializa gráfico de movimentações
         setTimeout(() => {
             initMovementChart();
         }, 100);
         
-        // FIX BUG-04: remove listener anterior antes de adicionar, evitando acúmulo a cada render()
         document.removeEventListener('keydown', handleKeyboardShortcuts);
         document.addEventListener('keydown', handleKeyboardShortcuts);
     }
@@ -2098,7 +2241,6 @@ ${barcodeArt}
         const entriesData = [];
         const exitsData = [];
         
-        // Prepara dados dos últimos 7 dias
         for (let i = 6; i >= 0; i--) {
             const date = new Date();
             date.setDate(date.getDate() - i);
@@ -2180,13 +2322,11 @@ ${barcodeArt}
     }
     
     function handleKeyboardShortcuts(e) {
-        // Ctrl + N = Novo produto
         if (e.ctrlKey && e.key === 'n') {
             e.preventDefault();
             window.modals.openProductModal();
         }
         
-        // Ctrl + H = Histórico
         if (e.ctrlKey && e.key === 'h') {
             e.preventDefault();
             viewMovementHistory();
@@ -2223,7 +2363,6 @@ ${barcodeArt}
         }
     }
     
-    // Debounced filter para melhor performance
     const filterDebounced = window.utils.debounce(filter, 300);
     
     function sort(field) {
@@ -2264,6 +2403,13 @@ ${barcodeArt}
         generateBarcodes,
         generateReplenishmentOrder,
         printInventory,
-        refreshMovementChart
+        refreshMovementChart,
+        // NOVAS FUNÇÕES
+        showSmartReplenishment,
+        getAverageDailySales,
+        calculateReorderPoint,
+        calculateEOQ,
+        generateSmartReplenishment,
+        exportPurchaseOrder
     };
 })();
