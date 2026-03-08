@@ -1,5 +1,6 @@
 /**
  * Estado Centralizado — Versão com suporte a fornecedores e migração segura
+ * Agora com campos para estoque inteligente (leadTime, safetyStock, etc.)
  */
 window.state = (function() {
     'use strict';
@@ -10,7 +11,7 @@ window.state = (function() {
     var initialState = {
         products: [],
         clients: [],
-        suppliers: [],          // ← NOVO: array de fornecedores
+        suppliers: [],
         sales: [],
         saldo: 0,
         fidelity: {
@@ -41,12 +42,26 @@ window.state = (function() {
     var state = savedState ? JSON.parse(savedState) : JSON.parse(JSON.stringify(initialState));
 
     // Garantir que todas as propriedades do estado inicial existam (migração)
-    // Isso evita undefined em versões antigas sem 'suppliers'
     state = {
         ...JSON.parse(JSON.stringify(initialState)),
         ...state,
-        suppliers: state.suppliers || []  // força ser array
+        suppliers: state.suppliers || []
     };
+
+    // Migração: garantir que cada produto tenha os novos campos de estoque inteligente
+    const defaultProductFields = {
+        leadTime: 3,                // dias para entrega do fornecedor
+        safetyStock: 5,             // estoque de segurança (pode ser calculado depois)
+        maxStock: 100,              // limite superior
+        supplierId: null,           // referência ao fornecedor
+        holdingCost: 0.1,           // custo de armazenagem por unidade/dia
+        orderCost: 10.0             // custo fixo por pedido
+    };
+
+    state.products = (state.products || []).map(p => ({
+        ...defaultProductFields,
+        ...p
+    }));
 
     var listeners = [];
 
@@ -142,7 +157,7 @@ window.state = (function() {
     }
 
     function getSuppliers() {
-        return state.suppliers ? state.suppliers.slice() : [];  // ← seguro
+        return state.suppliers ? state.suppliers.slice() : [];
     }
 
     function getSales() {
@@ -161,10 +176,19 @@ window.state = (function() {
     // MÉTODOS DE MODIFICAÇÃO
     // ========================================
     function addProduct(product) {
+        // Garantir que os novos campos existam
+        const defaultFields = {
+            leadTime: 3,
+            safetyStock: 5,
+            maxStock: 100,
+            supplierId: null,
+            holdingCost: 0.1,
+            orderCost: 10.0
+        };
         product.id = generateId();
         product.sold = 0;
         product.createdAt = new Date().toISOString();
-        state.products.push(product);
+        state.products.push({ ...defaultFields, ...product });
         persist();
         return product.id;
     }
@@ -211,7 +235,7 @@ window.state = (function() {
     }
 
     // ========================================
-    // MÉTODOS PARA FORNECEDORES (NOVOS)
+    // MÉTODOS PARA FORNECEDORES
     // ========================================
     function addSupplier(supplier) {
         supplier.id = generateId();
