@@ -7,6 +7,44 @@
 window.fidelidade = (function() {
     'use strict';
 
+    // ── Escape HTML (anti-XSS) ──────────────────────────────────────────────
+    function esc(str) {
+        if (str == null) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    // ── Histórico de Pontos ─────────────────────────────────────────────────
+    const POINTS_HISTORY_KEY = 'fidelidade-points-history';
+
+    function getPointsHistory() {
+        try {
+            return JSON.parse(localStorage.getItem(POINTS_HISTORY_KEY) || '[]');
+        } catch { return []; }
+    }
+
+    function recordPointsEvent(clientId, clientName, delta, reason) {
+        const history = getPointsHistory();
+        history.push({
+            id: window.utils?.generateId?.() || ('ph_' + Date.now()),
+            clientId,
+            clientName,
+            delta,
+            reason: reason || 'Ajuste',
+            date: new Date().toISOString()
+        });
+        // Mantém no máximo 500 registros
+        if (history.length > 500) history.splice(0, history.length - 500);
+        try { localStorage.setItem(POINTS_HISTORY_KEY, JSON.stringify(history)); } catch {}
+    }
+
+    // Exporta para uso externo (ex.: PDV ao concluir venda)
+    window.fidelidade_recordPoints = recordPointsEvent;
+
     // ========================================
     // VERIFICAÇÃO DE DEPENDÊNCIAS
     // ========================================
@@ -258,11 +296,11 @@ window.fidelidade = (function() {
                 <div class="list-group-item d-flex justify-content-between align-items-center">
                     <div>
                         <span class="me-2">${medal}</span>
-                        <strong>${c.nome || 'Sem nome'}</strong>
+                        <strong>${esc(c.nome) || 'Sem nome'}</strong>
                         <br>
-                        <small class="text-muted">${c.fid || ''}</small>
+                        <small class="text-muted">${esc(c.fid) || ''}</small>
                     </div>
-                    <span class="badge-points">${c.points || 0} pts</span>
+                    <span class="badge-points">${esc(c.points || 0)} pts</span>
                 </div>
             `;
         });
@@ -272,32 +310,32 @@ window.fidelidade = (function() {
     }
     
     function renderMovements() {
-        // Simulação de movimentações (idealmente teria um histórico real)
-        const clients = (window.state.getClients?.() || [])
-            .filter(c => (c.points || 0) > 0)
-            .sort((a, b) => (b.points || 0) - (a.points || 0))
-            .slice(0, 5);
-        
-        if (clients.length === 0) {
+        const history = getPointsHistory()
+            .sort((a, b) => new Date(b.date) - new Date(a.date))
+            .slice(0, 8);
+
+        if (history.length === 0) {
             return '<p class="text-muted text-center py-4">Nenhuma movimentação recente</p>';
         }
-        
+
         let html = '';
-        clients.forEach(c => {
+        history.forEach(h => {
+            const isPositive = h.delta >= 0;
+            const badgeClass = isPositive ? 'bg-success' : 'bg-danger';
+            const icon = isPositive ? 'bi-plus-circle' : 'bi-dash-circle';
             html += `
                 <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded">
                     <div>
-                        <strong>${c.nome || 'Sem nome'}</strong>
+                        <strong>${esc(h.clientName)}</strong>
                         <br>
-                        <small class="text-muted">${c.points || 0} pontos atuais</small>
+                        <small class="text-muted">${esc(h.reason)} · ${new Date(h.date).toLocaleDateString('pt-BR')}</small>
                     </div>
-                    <span class="badge bg-success">
-                        <i class="bi bi-plus-circle"></i> +${Math.floor((c.points || 0) * 0.1)} esta semana
+                    <span class="badge ${badgeClass}">
+                        <i class="bi ${icon}"></i> ${isPositive ? '+' : ''}${esc(h.delta)} pts
                     </span>
                 </div>
             `;
         });
-        
         return html;
     }
     
@@ -358,9 +396,9 @@ window.fidelidade = (function() {
         window.state.updateFidelity?.(fidelity);
         window.utils.showToast?.('Configurações de fidelidade salvas!', 'success');
         
-        // Atualiza bônus de novos clientes se necessário
+        // Registra evento de alteração de bônus se o valor mudou
         const currentBonus = window.state.getFidelity?.()?.bonus;
-        if (fidelity.bonus !== currentBonus) {
+        if (fidelity.bonus !== currentBonus && fidelity.bonus > 0) {
             window.utils.showAlert?.('Novos clientes receberão o bônus atualizado', 'info');
         }
     }

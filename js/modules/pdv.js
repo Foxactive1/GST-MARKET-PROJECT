@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * MÓDULO PDV (PONTO DE VENDA) - VERSÃO REVISADA 2.2.0
+ * MÓDULO PDV (PONTO DE VENDA) - VERSÃO 2.3.0 (2026-03-14)
  * ============================================================================
  * 
  * Responsável por:
@@ -16,16 +16,18 @@
  * - Relatórios de caixa
  * - Produtos favoritos
  * 
- * Melhorias v2.2.0:
- * - Integração com utils aprimorados (parseMonetaryValue, formatCurrency, máscaras)
- * - Uso correto dos métodos de atualização do state (imutabilidade)
- * - Verificação de dependências no início
- * - Parsing consistente de valores monetários em todos os inputs
- * - Máscaras de moeda nos campos de entrada
+ * Correções v2.3.0:
+ * - toast 'error' → 'danger' (tipo válido)
+ * - saveCashierSession / saveSuspendedSales / saveFavoriteProducts sincronizados com window.state
+ * - Fechar caixa limpa também window.state.setPdvSession(null)
+ * - Pontos registrados no histórico de fidelidade (window.fidelidade_recordPoints)
+ * - filterCategory corrigido para usar classes pdv-cat-tab
+ * - updateCart com seletor de sumário estável (.pdv-cart-summary)
+ * - Botões Finalizar/Suspender atualizados dinamicamente sem re-render completo
  * 
  * @author Dione Castro Alves - InNovaIdeia
- * @version 2.2.0
- * @date 2026
+ * @version 2.3.0
+ * @date 2026-03-14
  */
 
 window.pdv = (function() {
@@ -102,7 +104,45 @@ window.pdv = (function() {
         loadCashierSession();
         loadSuspendedSales();
         loadFavoriteProducts();
+        loadCart(); // MELHORIA: restaura carrinho ativo se a aba foi fechada acidentalmente
         checkCashierStatus();
+    }
+
+    // MELHORIA: Persiste o carrinho ativo no localStorage para sobreviver a fechamentos acidentais
+    function saveCart() {
+        try {
+            localStorage.setItem('pdv-cart', JSON.stringify({
+                cart: cart,
+                selectedClient: selectedClient,
+                globalDiscount: globalDiscount
+            }));
+        } catch (error) {
+            console.error('Erro ao salvar carrinho:', error);
+        }
+    }
+
+    function loadCart() {
+        try {
+            const saved = localStorage.getItem('pdv-cart');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                // Só restaura se o caixa estiver aberto — carrinho sem caixa não faz sentido
+                if (cashierSession && cashierSession.isOpen) {
+                    cart           = parsed.cart           || [];
+                    selectedClient = parsed.selectedClient || null;
+                    globalDiscount = parsed.globalDiscount || 0;
+                    if (cart.length > 0) {
+                        console.log('[PDV] Carrinho restaurado:', cart.length, 'item(s)');
+                    }
+                } else {
+                    // Caixa fechado — descarta o carrinho salvo
+                    localStorage.removeItem('pdv-cart');
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao restaurar carrinho:', error);
+            cart = [];
+        }
     }
     
     function loadCashierSession() {
@@ -199,6 +239,9 @@ window.pdv = (function() {
             </div>
         `;
         
+        // Injeta estilos do PDV uma única vez
+        injectPDVStyles();
+
         // Inicializa componentes
         initializeComponents();
     }
@@ -211,538 +254,629 @@ window.pdv = (function() {
         const sessionInfo = cashierSession || {};
         const totalSalesSession = calculateSessionSales();
         const suspendedCount = suspendedSales.length;
-        
+
         return `
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    <h2 class="mb-1">
-                        <i class="bi bi-cash-register text-success"></i>
-                        Ponto de Venda
-                    </h2>
-                    <p class="text-muted mb-0">
+            <div class="pdv-header mb-3">
+                <div class="pdv-header-top">
+                    <div class="pdv-title-group">
+                        <div class="pdv-icon-wrap">
+                            <i class="bi bi-cash-register"></i>
+                        </div>
+                        <div>
+                            <span class="pdv-title">Ponto de Venda</span>
+                            <div class="pdv-breadcrumb">PDV &mdash; Gst Tech</div>
+                        </div>
+                    </div>
+
+                    <div class="pdv-status-group">
                         ${sessionInfo.isOpen ? `
-                            <i class="bi bi-circle-fill text-success" style="font-size: 0.5rem;"></i>
-                            Caixa aberto •
-                            Operador: <strong>${sessionInfo.operator || 'Sistema'}</strong> •
-                            Vendas: <strong class="text-success">R$ ${window.utils.formatCurrency(totalSalesSession)}</strong>
+                            <span class="pdv-pill pdv-pill-open">
+                                <span class="pdv-dot"></span>Caixa Aberto
+                            </span>
+                            <span class="pdv-pill pdv-pill-operator">
+                                <i class="bi bi-person-badge"></i>${sessionInfo.operator || 'Sistema'}
+                            </span>
+                            <span class="pdv-pill pdv-pill-sales">
+                                <i class="bi bi-graph-up-arrow"></i>R$ ${window.utils.formatCurrency(totalSalesSession)}
+                            </span>
                         ` : `
-                            <i class="bi bi-circle-fill text-danger" style="font-size: 0.5rem;"></i>
-                            <strong class="text-danger">Caixa fechado</strong>
+                            <span class="pdv-pill pdv-pill-closed">
+                                <span class="pdv-dot pdv-dot-danger"></span>Caixa Fechado
+                            </span>
                         `}
-                    </p>
-                </div>
-                
-                <div class="d-flex gap-2 flex-wrap">
-                    ${suspendedCount > 0 ? `
-                        <button class="btn btn-warning" onclick="window.pdv.showSuspendedSales()">
-                            <i class="bi bi-clock-history"></i>
-                            Vendas Suspensas (${suspendedCount})
-                        </button>
-                    ` : ''}
-                    
-                    <div class="btn-group">
-                        <button class="btn btn-outline-secondary" 
-                                onclick="window.pdv.showCashierReport()"
-                                title="Relatório do caixa">
-                            <i class="bi bi-file-text"></i>
-                        </button>
-                        
-                        <button class="btn btn-outline-secondary" 
-                                onclick="window.pdv.showCashMovements()"
-                                title="Sangria/Reforço">
-                            <i class="bi bi-arrow-left-right"></i>
-                        </button>
-                        
-                        <button class="btn btn-outline-secondary" 
-                                onclick="window.pdv.showFavorites()"
-                                title="Produtos favoritos">
+                        ${suspendedCount > 0 ? `
+                            <button class="pdv-pill pdv-pill-suspended" onclick="window.pdv.showSuspendedSales()">
+                                <i class="bi bi-pause-circle-fill"></i>${suspendedCount} suspensa${suspendedCount > 1 ? 's' : ''}
+                            </button>
+                        ` : ''}
+                    </div>
+
+                    <div class="pdv-actions-group">
+                        <button class="pdv-action-btn" onclick="window.pdv.showFavorites()" title="Favoritos (F1-F12)">
                             <i class="bi bi-star"></i>
                         </button>
+                        <button class="pdv-action-btn" onclick="window.pdv.showCashMovements()" title="Sangria / Reforco">
+                            <i class="bi bi-arrow-left-right"></i>
+                        </button>
+                        <button class="pdv-action-btn" onclick="window.pdv.showCashierReport()" title="Relatorio do Caixa">
+                            <i class="bi bi-file-bar-graph"></i>
+                        </button>
+                        <div class="pdv-divider-v"></div>
+                        ${sessionInfo.isOpen ? `
+                            <button class="pdv-action-btn pdv-action-danger" onclick="window.pdv.closeCashier()">
+                                <i class="bi bi-lock"></i><span>Fechar Caixa</span>
+                            </button>
+                        ` : `
+                            <button class="pdv-action-btn pdv-action-success" onclick="window.pdv.openCashier()">
+                                <i class="bi bi-unlock"></i><span>Abrir Caixa</span>
+                            </button>
+                        `}
                     </div>
-                    
-                    ${sessionInfo.isOpen ? `
-                        <button class="btn btn-danger" onclick="window.pdv.closeCashier()">
-                            <i class="bi bi-lock"></i> Fechar Caixa
-                        </button>
-                    ` : `
-                        <button class="btn btn-success" onclick="window.pdv.openCashier()">
-                            <i class="bi bi-unlock"></i> Abrir Caixa
-                        </button>
-                    `}
-                    
-                    <button class="btn btn-outline-danger" onclick="window.pdv.clearCart()">
-                        <i class="bi bi-trash"></i> Limpar
-                    </button>
                 </div>
             </div>
         `;
     }
-    
+
     function renderAlerts() {
-        let alerts = '';
-        
-        // Alerta de caixa fechado
+        // Apenas alerta de caixa fechado — info do scanner fica inline na busca
         if (!cashierSession || !cashierSession.isOpen) {
-            alerts += `
-                <div class="alert alert-warning mb-3">
-                    <i class="bi bi-exclamation-triangle"></i>
-                    <strong>Atenção:</strong> O caixa está fechado. Abra o caixa para realizar vendas.
+            return `
+                <div class="pdv-alert-caixa mb-3">
+                    <i class="bi bi-lock-fill"></i>
+                    <span><strong>Caixa fechado.</strong> Abra o caixa para iniciar vendas.</span>
+                    <button class="pdv-alert-cta" onclick="window.pdv.openCashier()">
+                        Abrir Caixa <i class="bi bi-chevron-right"></i>
+                    </button>
                 </div>
             `;
         }
-        
-        // Alerta de modo scanner
-        alerts += `
-            <div class="alert alert-info mb-3 d-flex justify-content-between align-items-center">
-                <div>
-                    <i class="bi bi-upc-scan"></i>
-                    <strong>Modo Scanner Ativo</strong> - Use o leitor de código de barras ou digite o código e pressione Enter
-                </div>
-                <span class="badge bg-info">F8 para desativar</span>
-            </div>
-        `;
-        
-        return alerts;
+        return '';
     }
-    
+
     function renderProductsArea(state) {
+        const total = productsCache.length;
+        const filtered = filterProducts(productsCache);
         return `
-            <div class="card-modern">
-                <div class="card-header-modern">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-grid"></i> Produtos Disponíveis
-                    </h5>
-                    <div class="search-box" style="width: 350px;">
-                        <i class="bi bi-search"></i>
-                        <input type="text" 
-                               id="pdv-search" 
-                               class="form-control" 
-                               placeholder="Digite código, nome ou use o scanner..."
+            <div class="pdv-products-panel">
+                <div class="pdv-search-wrap">
+                    <div class="pdv-search-inner">
+                        <i class="bi bi-upc-scan pdv-search-icon-left"></i>
+                        <input type="text"
+                               id="pdv-search"
+                               class="pdv-search-input"
+                               placeholder="Codigo EAN, nome ou use o scanner..."
                                autocomplete="off"
                                autofocus>
+                        <span class="pdv-search-hint">Enter</span>
                     </div>
                 </div>
-                
-                <!-- Filtros rápidos -->
-                <div class="d-flex gap-2 mb-3 flex-wrap">
-                    <button class="btn btn-sm ${currentFilter === 'all' ? 'btn-primary' : 'btn-outline-primary'}" 
+
+                <div class="pdv-category-tabs">
+                    <button class="pdv-cat-tab ${currentFilter === 'all' ? 'active' : ''}"
                             onclick="window.pdv.filterCategory('all', this)">
-                        <i class="bi bi-grid-3x3"></i> Todos
+                        <i class="bi bi-grid-3x3-gap-fill"></i> Todos
+                        <span class="pdv-cat-count">${total}</span>
                     </button>
-                    <button class="btn btn-sm ${currentFilter === 'Alimentos' ? 'btn-primary' : 'btn-outline-primary'}" 
+                    <button class="pdv-cat-tab ${currentFilter === 'Alimentos' ? 'active' : ''}"
                             onclick="window.pdv.filterCategory('Alimentos', this)">
-                        🍞 Alimentos
+                        Alimentos
                     </button>
-                    <button class="btn btn-sm ${currentFilter === 'Bebidas' ? 'btn-primary' : 'btn-outline-primary'}" 
+                    <button class="pdv-cat-tab ${currentFilter === 'Bebidas' ? 'active' : ''}"
                             onclick="window.pdv.filterCategory('Bebidas', this)">
-                        🥤 Bebidas
+                        Bebidas
                     </button>
-                    <button class="btn btn-sm ${currentFilter === 'Higiene' ? 'btn-primary' : 'btn-outline-primary'}" 
+                    <button class="pdv-cat-tab ${currentFilter === 'Higiene' ? 'active' : ''}"
                             onclick="window.pdv.filterCategory('Higiene', this)">
-                        🧼 Higiene
+                        Higiene
                     </button>
-                    <button class="btn btn-sm ${currentFilter === 'Limpeza' ? 'btn-primary' : 'btn-outline-primary'}" 
+                    <button class="pdv-cat-tab ${currentFilter === 'Limpeza' ? 'active' : ''}"
                             onclick="window.pdv.filterCategory('Limpeza', this)">
-                        🧹 Limpeza
+                        Limpeza
                     </button>
-                    <button class="btn btn-sm ${currentFilter === 'favorites' ? 'btn-primary' : 'btn-outline-primary'}" 
+                    <button class="pdv-cat-tab ${currentFilter === 'favorites' ? 'active' : ''}"
                             onclick="window.pdv.filterCategory('favorites', this)">
-                        <i class="bi bi-star-fill"></i> Favoritos
+                        <i class="bi bi-star-fill" style="color:#f59e0b;"></i> Favoritos
                     </button>
                 </div>
-                
-                <!-- Grid de Produtos -->
-                <div id="product-grid" 
-                     class="product-grid" 
-                     style="max-height: 550px; overflow-y: auto;">
-                    ${renderProductGrid(filterProducts(productsCache))}
+
+                <div id="product-grid" class="pdv-product-grid">
+                    ${renderProductGrid(filtered)}
                 </div>
-                
-                <div class="mt-3 text-muted small">
-                    <i class="bi bi-info-circle"></i>
-                    Dica: Use F1-F12 para acessar produtos favoritos rapidamente
+
+                <div class="pdv-products-footer">
+                    <i class="bi bi-keyboard"></i>
+                    F1-F12 para favoritos &nbsp;|&nbsp; Enter para buscar por codigo
                 </div>
             </div>
         `;
     }
-    
+
     function renderProductGrid(products) {
         if (!products || products.length === 0) {
             return `
-                <div class="text-center py-5">
-                    <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
-                    <p class="text-muted mt-3 mb-0">Nenhum produto disponível</p>
-                    <button class="btn btn-primary btn-sm mt-3" onclick="window.modals.openProductModal()">
-                        <i class="bi bi-plus"></i> Cadastrar Produto
+                <div class="pdv-empty-state">
+                    <div class="pdv-empty-icon"><i class="bi bi-inbox"></i></div>
+                    <p class="pdv-empty-title">Nenhum produto disponivel</p>
+                    <p class="pdv-empty-sub">Ajuste o filtro ou cadastre produtos no estoque</p>
+                    <button class="btn btn-sm btn-outline-success mt-2" onclick="window.modals?.openProductModal()">
+                        <i class="bi bi-plus-lg"></i> Cadastrar Produto
                     </button>
                 </div>
             `;
         }
-        
+
         return products.map(p => {
             const inStock = p.qtd > 0 || CONFIG.allowNegativeStock;
             const isFavorite = Object.values(favoriteProducts).includes(p.id);
             const inCart = cart.find(item => item.id === p.id);
-            
+            const lowStock = p.qtd > 0 && p.qtd <= (p.minStock || 5);
+
             return `
-                <div class="product-card ${!inStock ? 'out-of-stock' : ''} ${inCart ? 'in-cart' : ''}" 
+                <div class="pdv-prod-card ${!inStock ? 'out-of-stock' : ''} ${inCart ? 'in-cart' : ''}"
                      onclick="${inStock ? `window.pdv.addToCart('${p.id}')` : ''}"
                      data-product-id="${p.id}">
-                    ${isFavorite ? `
-                        <div class="position-absolute top-0 end-0 p-2">
-                            <i class="bi bi-star-fill text-warning"></i>
-                        </div>
-                    ` : ''}
-                    
-                    <div class="d-flex justify-content-between">
-                        <div class="flex-grow-1">
-                            <div class="product-name">${p.nome}</div>
-                            <div class="product-code">
-                                <i class="bi bi-upc-scan"></i> ${p.code || 'S/código'}
-                            </div>
-                            ${p.categoria ? `
-                                <span class="badge bg-light text-dark mt-1">${p.categoria}</span>
-                            ` : ''}
-                        </div>
-                        <div class="text-end">
-                            <div class="product-price">R$ ${window.utils.formatCurrency(p.preco)}</div>
-                            <div class="product-stock ${p.qtd <= (p.minStock || 5) ? 'text-warning' : ''}">
-                                <i class="bi bi-box"></i> ${p.qtd} ${p.unit || 'un'}
-                            </div>
-                            ${inCart ? `
-                                <div class="badge bg-success mt-1">
-                                    No carrinho: ${inCart.qty}
-                                </div>
-                            ` : ''}
-                        </div>
+
+                    <div class="pdv-prod-badges">
+                        ${isFavorite ? `<span class="pdv-badge-fav"><i class="bi bi-star-fill"></i></span>` : ''}
+                        ${inCart ? `<span class="pdv-badge-cart">${inCart.qty}</span>` : ''}
+                        ${lowStock && inStock ? `<span class="pdv-badge-low">!</span>` : ''}
                     </div>
-                    
-                    ${!inStock ? `
-                        <div class="overlay">
-                            <strong>SEM ESTOQUE</strong>
-                        </div>
-                    ` : ''}
+
+                    <div class="pdv-prod-name">${p.nome}</div>
+                    ${p.categoria ? `<div class="pdv-prod-cat">${p.categoria}</div>` : ''}
+
+                    <div class="pdv-prod-footer">
+                        <span class="pdv-prod-price">R$ ${window.utils.formatCurrency(p.preco)}</span>
+                        <span class="pdv-prod-stock ${lowStock ? 'low' : ''} ${!inStock ? 'zero' : ''}">
+                            <i class="bi bi-box"></i> ${p.qtd}${p.unit ? ' ' + p.unit : ''}
+                        </span>
+                    </div>
+
+                    ${p.code ? `<div class="pdv-prod-ean">${p.code}</div>` : ''}
+                    ${!inStock ? `<div class="pdv-prod-overlay">SEM ESTOQUE</div>` : ''}
                 </div>
             `;
         }).join('');
     }
-    
+
     function renderCartArea(state) {
         const itemCount = cart.reduce((sum, item) => sum + item.qty, 0);
         const hasClient = selectedClient !== null;
-        
+        const cartTotal = calculateSubtotal() - calculateTotalDiscount();
+
         return `
-            <div class="cart-container">
-                <!-- Cabeçalho do Carrinho -->
-                <div class="p-3 border-bottom bg-light">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">
-                            <i class="bi bi-cart3"></i> Carrinho
-                            <span class="badge bg-primary ms-2" id="cart-count">${itemCount}</span>
-                        </h5>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-sm ${hasClient ? 'btn-success' : 'btn-outline-secondary'}" 
-                                    onclick="window.pdv.toggleClient()"
-                                    title="Vincular cliente">
-                                <i class="bi bi-person${hasClient ? '-check' : ''}"></i>
-                            </button>
-                            
-                            <button class="btn btn-sm btn-outline-info" 
-                                    onclick="window.pdv.applyGlobalDiscount()"
-                                    title="Desconto na venda">
-                                <i class="bi bi-percent"></i>
-                            </button>
-                            
-                            <button class="btn btn-sm btn-outline-warning" 
-                                    onclick="window.pdv.suspendSale()"
-                                    title="Suspender venda"
-                                    ${cart.length === 0 ? 'disabled' : ''}>
-                                <i class="bi bi-pause-circle"></i>
-                            </button>
-                        </div>
+            <div class="pdv-cart-panel">
+                <div class="pdv-cart-header">
+                    <div class="pdv-cart-title">
+                        <i class="bi bi-cart3"></i>
+                        <span>Carrinho</span>
+                        <span class="pdv-cart-count" id="cart-count">${itemCount}</span>
+                    </div>
+                    <div class="pdv-cart-header-actions">
+                        <button class="pdv-cart-icon-btn ${hasClient ? 'active' : ''}"
+                                onclick="window.pdv.toggleClient()"
+                                title="${hasClient ? 'Cliente vinculado' : 'Vincular cliente'}">
+                            <i class="bi bi-person${hasClient ? '-check-fill' : ''}"></i>
+                        </button>
+                        <button class="pdv-cart-icon-btn"
+                                onclick="window.pdv.applyGlobalDiscount()"
+                                title="Desconto na venda">
+                            <i class="bi bi-percent"></i>
+                        </button>
+                        <button class="pdv-cart-icon-btn warn"
+                                onclick="window.pdv.suspendSale()"
+                                title="Suspender venda"
+                                ${cart.length === 0 ? 'disabled' : ''}>
+                            <i class="bi bi-pause-circle"></i>
+                        </button>
+                        <button class="pdv-cart-icon-btn danger"
+                                onclick="window.pdv.clearCart()"
+                                title="Limpar carrinho">
+                            <i class="bi bi-trash"></i>
+                        </button>
                     </div>
                 </div>
-                
-                <!-- Seleção de Cliente -->
+
                 ${renderClientSelector(state.clients)}
-                
-                <!-- Itens do Carrinho -->
-                <div id="cart-items" class="cart-items">
+
+                <div id="cart-items" class="pdv-cart-items">
                     ${renderCartItems()}
                 </div>
-                
-                <!-- Resumo e Total -->
+
                 ${renderCartSummary()}
-                
-                <!-- Botões de Ação -->
-                <div class="cart-total">
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-success btn-lg" 
-                                onclick="window.pdv.openCheckout()"
-                                ${cart.length === 0 ? 'disabled' : ''}>
-                            <i class="bi bi-check-circle"></i> Finalizar Venda (F9)
-                        </button>
-                        
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <button class="btn btn-outline-warning w-100 btn-sm" 
-                                        onclick="window.pdv.suspendSale()"
-                                        ${cart.length === 0 ? 'disabled' : ''}>
-                                    <i class="bi bi-pause"></i> Suspender
-                                </button>
-                            </div>
-                            <div class="col-6">
-                                <button class="btn btn-outline-danger w-100 btn-sm" 
-                                        onclick="window.pdv.clearCart()">
-                                    <i class="bi bi-trash"></i> Limpar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+
+                <div class="pdv-cart-cta">
+                    <button class="pdv-finalize-btn"
+                            onclick="window.pdv.openCheckout()"
+                            ${cart.length === 0 ? 'disabled' : ''}>
+                        <span class="pdv-finalize-label">
+                            <i class="bi bi-check-circle-fill"></i>
+                            Finalizar Venda
+                        </span>
+                        ${cart.length > 0 ? `
+                            <span class="pdv-finalize-total">
+                                R$ ${window.utils.formatCurrency(cartTotal)}
+                            </span>
+                        ` : `<span class="pdv-finalize-hint">F9</span>`}
+                    </button>
+                    <button class="pdv-suspend-btn"
+                            onclick="window.pdv.suspendSale()"
+                            ${cart.length === 0 ? 'disabled' : ''}>
+                        <i class="bi bi-pause"></i> Suspender
+                    </button>
                 </div>
             </div>
         `;
     }
-    
+
     function renderClientSelector(clients) {
-        if (!selectedClient) return '';
-        
+        // FIX BUG-CLIENT: o elemento #client-select-area DEVE sempre existir no DOM
+        // para que toggleClient() consiga encontrá-lo via getElementById e fazer replaceWith().
+        // Antes retornava '' quando selectedClient === null, tornando o botão inoperante
+        // até um render() completo (ex: abrir/fechar atalhos).
+
+        if (!selectedClient) {
+            // Placeholder visível e clicável — não há lógica nova, apenas o container sempre presente
+            return `
+                <div id="client-select-area" class="pdv-client-area pdv-client-placeholder"
+                     onclick="window.pdv.toggleClient()" title="Vincular cliente">
+                    <i class="bi bi-person-plus"></i>
+                    <span>Vincular cliente à venda</span>
+                </div>
+            `;
+        }
+
         return `
-            <div id="client-select-area" class="p-3 border-bottom bg-light">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <label class="form-label mb-0 small fw-bold">
+            <div id="client-select-area" class="pdv-client-area">
+                <div class="pdv-client-header">
+                    <span class="pdv-client-label">
                         <i class="bi bi-person-circle"></i> Cliente
-                    </label>
-                    <button class="btn btn-sm btn-link text-danger" onclick="window.pdv.removeClient()">
-                        <i class="bi bi-x-circle"></i> Remover
+                    </span>
+                    <button class="pdv-client-remove" onclick="window.pdv.removeClient()">
+                        <i class="bi bi-x"></i> Remover
                     </button>
                 </div>
-                
-                <select id="cart-client" 
-                        class="form-select form-select-sm mb-2" 
+                <select id="cart-client"
+                        class="form-select form-select-sm pdv-client-select"
                         onchange="window.pdv.updateSelectedClient(this.value)">
                     <option value="">Selecione um cliente...</option>
                     ${clients.map(c => `
                         <option value="${c.id}" ${selectedClient && selectedClient.id === c.id ? 'selected' : ''}>
-                            ${c.nome} - ${c.fid || 'Sem código'} (${c.points || 0} pts)
+                            ${c.nome} - ${c.fid || 'Sem codigo'} (${c.points || 0} pts)
                         </option>
                     `).join('')}
                 </select>
-                
                 ${selectedClient && selectedClient.id ? renderClientInfo(selectedClient) : ''}
             </div>
         `;
     }
-    
+
     function renderClientInfo(client) {
         if (!client || !client.id) return '';
-        
         const clientData = window.state.getClients().find(c => c.id === client.id);
         if (!clientData) return '';
-        
         return `
-            <div class="alert alert-success small mb-0 py-2">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <i class="bi bi-star-fill text-warning"></i>
-                        <strong>${clientData.nome}</strong>
-                    </div>
-                    <span class="badge bg-success">${clientData.points || 0} pontos</span>
-                </div>
+            <div class="pdv-client-info">
+                <i class="bi bi-star-fill" style="color:#f59e0b;"></i>
+                <span>${clientData.nome}</span>
+                <span class="pdv-client-pts">${clientData.points || 0} pts</span>
             </div>
         `;
     }
-    
+
     function renderCartItems() {
         if (cart.length === 0) {
             return `
-                <div class="text-center py-5">
-                    <i class="bi bi-cart-x text-muted" style="font-size: 3rem;"></i>
-                    <p class="text-muted mt-3 mb-0">Carrinho vazio</p>
-                    <small class="text-muted">Adicione produtos para iniciar a venda</small>
+                <div class="pdv-cart-empty">
+                    <div class="pdv-cart-empty-icon"><i class="bi bi-cart-x"></i></div>
+                    <p>Carrinho vazio</p>
+                    <small>Clique em um produto para adicionar</small>
                 </div>
             `;
         }
-        
-        return cart.map((item, index) => `
-            <div class="cart-item" data-cart-index="${index}">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div class="flex-grow-1">
-                        <strong class="cart-item-name">${item.nome}</strong>
-                        <div class="small text-muted">
-                            R$ ${window.utils.formatCurrency(item.preco)} × ${item.qty}
-                            ${item.discount > 0 ? `
-                                <span class="badge bg-warning text-dark ms-1">
-                                    -${item.discount}%
-                                </span>
-                            ` : ''}
+
+        return cart.map((item, index) => {
+            const itemTotal = calculateItemTotal(item);
+            return `
+                <div class="pdv-cart-item" data-cart-index="${index}">
+                    <div class="pdv-cart-item-main">
+                        <div class="pdv-cart-item-info">
+                            <span class="pdv-cart-item-name">${item.nome}</span>
+                            <span class="pdv-cart-item-unit">
+                                R$ ${window.utils.formatCurrency(item.preco)}
+                                ${item.discount > 0 ? `<span class="pdv-cart-item-disc">-${item.discount.toFixed(0)}%</span>` : ''}
+                            </span>
                         </div>
-                        
-                        <!-- Controles de quantidade -->
-                        <div class="btn-group btn-group-sm mt-2">
-                            <button class="btn btn-outline-secondary" 
-                                    onclick="window.pdv.decreaseQuantity(${index})"
-                                    title="Diminuir quantidade">
+                        <div class="pdv-cart-item-total">
+                            R$ ${window.utils.formatCurrency(itemTotal)}
+                        </div>
+                    </div>
+
+                    <div class="pdv-cart-item-controls">
+                        <div class="pdv-qty-control">
+                            <button class="pdv-qty-btn" onclick="window.pdv.decreaseQuantity(${index})">
                                 <i class="bi bi-dash"></i>
                             </button>
-                            <button class="btn btn-outline-secondary" disabled>
-                                ${item.qty}
-                            </button>
-                            <button class="btn btn-outline-secondary" 
-                                    onclick="window.pdv.increaseQuantity(${index})"
-                                    title="Aumentar quantidade">
+                            <span class="pdv-qty-val">${item.qty}</span>
+                            <button class="pdv-qty-btn" onclick="window.pdv.increaseQuantity(${index})">
                                 <i class="bi bi-plus"></i>
                             </button>
                         </div>
-                        
-                        <!-- Ações do item -->
-                        <div class="btn-group btn-group-sm mt-2 ms-2">
-                            <button class="btn btn-outline-info" 
-                                    onclick="window.pdv.applyItemDiscount(${index})"
-                                    title="Desconto no item">
+                        <div class="pdv-item-actions">
+                            <button class="pdv-item-btn" onclick="window.pdv.applyItemDiscount(${index})" title="Desconto">
                                 <i class="bi bi-percent"></i>
                             </button>
-                            <button class="btn btn-outline-danger" 
-                                    onclick="window.pdv.removeFromCart(${index})"
-                                    title="Remover item">
+                            <button class="pdv-item-btn danger" onclick="window.pdv.removeFromCart(${index})" title="Remover">
                                 <i class="bi bi-trash"></i>
                             </button>
                         </div>
                     </div>
-                    
-                    <div class="text-end ms-3">
-                        <strong class="cart-item-total">
-                            R$ ${window.utils.formatCurrency(calculateItemTotal(item))}
-                        </strong>
-                    </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     }
-    
+
     function renderCartSummary() {
         const subtotal = calculateSubtotal();
         const discountAmount = calculateTotalDiscount();
         const total = subtotal - discountAmount;
         const itemCount = cart.reduce((sum, item) => sum + item.qty, 0);
-        
-        // Calcula pontos que o cliente vai ganhar
+
         let pointsToEarn = 0;
         if (selectedClient) {
             const fidelity = window.state.getFidelity?.() || { rate: 1 };
-            const rate = fidelity.rate || 1;
-            pointsToEarn = Math.floor(total / rate);
+            pointsToEarn = Math.floor(total / (fidelity.rate || 1));
         }
-        
+
+        if (cart.length === 0) return '<div class="pdv-cart-summary-empty"></div>';
+
         return `
-            <div class="p-3 border-top bg-light">
-                <div class="d-flex justify-content-between mb-2">
-                    <span class="text-muted">Subtotal (${itemCount} ${itemCount === 1 ? 'item' : 'itens'}):</span>
-                    <span class="fw-bold" id="cart-subtotal">
-                        R$ ${window.utils.formatCurrency(subtotal)}
-                    </span>
+            <div class="pdv-cart-summary">
+                <div class="pdv-summary-row">
+                    <span>Subtotal <small>(${itemCount} ${itemCount === 1 ? 'item' : 'itens'})</small></span>
+                    <span id="cart-subtotal">R$ ${window.utils.formatCurrency(subtotal)}</span>
                 </div>
-                
                 ${discountAmount > 0 ? `
-                    <div class="d-flex justify-content-between mb-2 text-success">
+                    <div class="pdv-summary-row discount">
                         <span>
-                            <i class="bi bi-tag"></i> Desconto:
+                            <i class="bi bi-tag-fill"></i> Desconto
+                            ${globalDiscount > 0 ? `
+                                <button class="pdv-remove-disc" onclick="window.pdv.removeGlobalDiscount()">
+                                    x${globalDiscount}%
+                                </button>` : ''}
                         </span>
                         <span>- R$ ${window.utils.formatCurrency(discountAmount)}</span>
                     </div>
                 ` : ''}
-                
-                ${globalDiscount > 0 ? `
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="small text-muted">
-                            Desconto geral: ${globalDiscount}%
-                        </span>
-                        <button class="btn btn-sm btn-link text-danger p-0" 
-                                onclick="window.pdv.removeGlobalDiscount()">
-                            <i class="bi bi-x"></i>
-                        </button>
-                    </div>
-                ` : ''}
-                
-                <hr class="my-2">
-                
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <span class="h5 mb-0">Total:</span>
-                    <span class="h3 mb-0 text-success" id="cart-total">
-                        R$ ${window.utils.formatCurrency(total)}
-                    </span>
+                <div class="pdv-summary-total">
+                    <span>Total</span>
+                    <span id="cart-total">R$ ${window.utils.formatCurrency(total)}</span>
                 </div>
-                
                 ${pointsToEarn > 0 ? `
-                    <div class="alert alert-success small py-2 mb-0">
+                    <div class="pdv-points-hint">
                         <i class="bi bi-star-fill"></i>
-                        Cliente vai ganhar <strong>${pointsToEarn} pontos</strong> nesta compra!
+                        Cliente ganha <strong>${pointsToEarn} pontos</strong>
                     </div>
                 ` : ''}
-            </div>
-        `;
-    }
-    
-    function renderQuickActions() {
-    // Verifica se o usuário fechou os atalhos
-    const hideQuickActions = localStorage.getItem('pdv-hide-quick-actions') === 'true';
-    
-    if (hideQuickActions) {
-        // Botão flutuante para reabrir
-        return `
-            <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1000;">
-                <button class="btn btn-sm btn-primary rounded-circle shadow" 
-                        onclick="window.pdv.toggleQuickActions()"
-                        title="Mostrar atalhos">
-                    <i class="bi bi-keyboard"></i>
-                </button>
             </div>
         `;
     }
 
-    // Painel de atalhos aberto
-    return `
-        <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1000; bottom: 70px;">
-            <div class="card shadow-lg" style="width: 250px;">
-                <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center py-2">
-                    <span class="small fw-bold">
-                        <i class="bi bi-keyboard"></i> Atalhos Rápidos
-                    </span>
-                    <button class="btn btn-sm btn-link p-0 text-muted" 
-                            onclick="window.pdv.hideQuickActions()"
-                            title="Fechar">
-                        <i class="bi bi-x-lg"></i>
+    function renderQuickActions() {
+        const hideQuickActions = localStorage.getItem('pdv-hide-quick-actions') === 'true';
+
+        if (hideQuickActions) {
+            return `
+                <div class="pdv-kb-toggle-wrap">
+                    <button class="pdv-kb-toggle-btn" onclick="window.pdv.toggleQuickActions()" title="Mostrar atalhos">
+                        <i class="bi bi-keyboard"></i>
                     </button>
                 </div>
-                <div class="card-body p-2 pt-0">
-                    <div class="small text-muted">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span><kbd>F1-F12</kbd></span>
-                            <span>Favoritos</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-1">
-                            <span><kbd>F9</kbd></span>
-                            <span>Finalizar</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-1">
-                            <span><kbd>F8</kbd></span>
-                            <span>Suspender</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-1">
-                            <span><kbd>Esc</kbd></span>
-                            <span>Limpar</span>
-                        </div>
-                        <div class="d-flex justify-content-between">
-                            <span><kbd>Enter</kbd></span>
-                            <span>Buscar</span>
-                        </div>
-                    </div>
+            `;
+        }
+
+        return `
+            <div class="pdv-kb-panel">
+                <div class="pdv-kb-header">
+                    <i class="bi bi-keyboard"></i>
+                    <span>Atalhos</span>
+                    <button class="pdv-kb-close" onclick="window.pdv.hideQuickActions()">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+                <div class="pdv-kb-list">
+                    <div class="pdv-kb-item"><kbd>F1-F12</kbd><span>Favoritos</span></div>
+                    <div class="pdv-kb-item"><kbd>F9</kbd><span>Finalizar</span></div>
+                    <div class="pdv-kb-item"><kbd>F8</kbd><span>Suspender</span></div>
+                    <div class="pdv-kb-item"><kbd>Esc</kbd><span>Limpar</span></div>
+                    <div class="pdv-kb-item"><kbd>Enter</kbd><span>Buscar codigo</span></div>
                 </div>
             </div>
-        </div>
-    `;
-}
-    
+        `;
+    }
+
+    // ========================================
+    // ESTILOS DO PDV (injetados uma vez no DOM)
+    // ========================================
+
+    function injectPDVStyles() {
+        if (document.getElementById('pdv-styles')) return;
+        const style = document.createElement('style');
+        style.id = 'pdv-styles';
+        style.textContent = `
+            /* ====== HEADER ====== */
+            .pdv-header { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:14px 20px; }
+            .pdv-header-top { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+            .pdv-title-group { display:flex; align-items:center; gap:12px; flex:0 0 auto; }
+            .pdv-icon-wrap { width:40px; height:40px; border-radius:10px; background:linear-gradient(135deg,#059669,#10b981); display:flex; align-items:center; justify-content:center; color:#fff; font-size:1.2rem; }
+            .pdv-title { font-size:1.15rem; font-weight:700; color:#111827; display:block; line-height:1.2; }
+            .pdv-breadcrumb { font-size:0.72rem; color:#9ca3af; letter-spacing:0.03em; }
+            .pdv-status-group { display:flex; align-items:center; gap:6px; flex:1; flex-wrap:wrap; }
+            .pdv-pill { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:20px; font-size:0.78rem; font-weight:600; border:none; cursor:default; }
+            .pdv-pill-open { background:#d1fae5; color:#065f46; }
+            .pdv-pill-closed { background:#fee2e2; color:#991b1b; }
+            .pdv-pill-operator { background:#eff6ff; color:#1d4ed8; }
+            .pdv-pill-sales { background:#f0fdf4; color:#166534; }
+            .pdv-pill-suspended { background:#fef3c7; color:#92400e; cursor:pointer; transition:opacity .15s; }
+            .pdv-pill-suspended:hover { opacity:.8; }
+            .pdv-dot { width:7px; height:7px; border-radius:50%; background:#10b981; display:inline-block; }
+            .pdv-dot-danger { background:#ef4444; }
+            .pdv-actions-group { display:flex; align-items:center; gap:6px; flex:0 0 auto; margin-left:auto; }
+            .pdv-divider-v { width:1px; height:28px; background:#e5e7eb; margin:0 4px; }
+            .pdv-action-btn { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px; border:1px solid #e5e7eb; background:#fff; color:#374151; font-size:0.82rem; font-weight:600; cursor:pointer; transition:all .15s; white-space:nowrap; }
+            .pdv-action-btn:hover { background:#f9fafb; border-color:#d1d5db; }
+            .pdv-action-btn.pdv-action-success { background:#059669; border-color:#059669; color:#fff; }
+            .pdv-action-btn.pdv-action-success:hover { background:#047857; }
+            .pdv-action-btn.pdv-action-danger { background:#dc2626; border-color:#dc2626; color:#fff; }
+            .pdv-action-btn.pdv-action-danger:hover { background:#b91c1c; }
+
+            /* ====== ALERT CAIXA ====== */
+            .pdv-alert-caixa { display:flex; align-items:center; gap:10px; background:#fffbeb; border:1px solid #fcd34d; border-radius:10px; padding:10px 16px; color:#92400e; font-size:0.88rem; }
+            .pdv-alert-cta { margin-left:auto; padding:5px 14px; background:#f59e0b; border:none; border-radius:7px; color:#fff; font-weight:700; font-size:0.8rem; cursor:pointer; display:flex; align-items:center; gap:4px; white-space:nowrap; transition:background .15s; }
+            .pdv-alert-cta:hover { background:#d97706; }
+
+            /* ====== PRODUCTS PANEL ====== */
+            .pdv-products-panel { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px; }
+            .pdv-search-wrap { margin-bottom:12px; }
+            .pdv-search-inner { position:relative; display:flex; align-items:center; }
+            .pdv-search-icon-left { position:absolute; left:12px; color:#6b7280; font-size:1rem; z-index:1; }
+            .pdv-search-input { width:100%; padding:10px 72px 10px 38px; border:2px solid #e5e7eb; border-radius:10px; font-size:0.9rem; background:#f9fafb; transition:border-color .15s,background .15s; outline:none; }
+            .pdv-search-input:focus { border-color:#10b981; background:#fff; box-shadow:0 0 0 3px rgba(16,185,129,.1); }
+            .pdv-search-hint { position:absolute; right:10px; background:#e5e7eb; color:#6b7280; font-size:0.7rem; font-weight:700; padding:3px 8px; border-radius:5px; pointer-events:none; }
+            .pdv-category-tabs { display:flex; gap:6px; overflow-x:auto; padding-bottom:8px; margin-bottom:12px; scrollbar-width:none; }
+            .pdv-category-tabs::-webkit-scrollbar { display:none; }
+            .pdv-cat-tab { display:inline-flex; align-items:center; gap:5px; padding:5px 13px; border-radius:20px; border:1.5px solid #e5e7eb; background:#fff; color:#6b7280; font-size:0.8rem; font-weight:600; cursor:pointer; white-space:nowrap; transition:all .15s; }
+            .pdv-cat-tab:hover { border-color:#10b981; color:#059669; }
+            .pdv-cat-tab.active { background:#059669; border-color:#059669; color:#fff; }
+            .pdv-cat-count { background:rgba(255,255,255,.25); border-radius:10px; padding:0 6px; font-size:0.7rem; }
+            .pdv-cat-tab.active .pdv-cat-count { background:rgba(255,255,255,.3); }
+
+            /* ====== PRODUCT GRID ====== */
+            .pdv-product-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; max-height:520px; overflow-y:auto; padding-right:4px; scrollbar-width:thin; scrollbar-color:#e5e7eb transparent; }
+            .pdv-product-grid::-webkit-scrollbar { width:4px; }
+            .pdv-product-grid::-webkit-scrollbar-thumb { background:#e5e7eb; border-radius:4px; }
+            .pdv-prod-card { position:relative; background:#fff; border:1.5px solid #e5e7eb; border-radius:10px; padding:12px 12px 10px; cursor:pointer; transition:all .15s; display:flex; flex-direction:column; gap:4px; user-select:none; }
+            .pdv-prod-card:hover { border-color:#10b981; box-shadow:0 4px 12px rgba(16,185,129,.12); transform:translateY(-1px); }
+            .pdv-prod-card:active { transform:translateY(0); box-shadow:none; }
+            .pdv-prod-card.in-cart { border-color:#10b981; background:linear-gradient(135deg,#f0fdf4 0%,#fff 100%); }
+            .pdv-prod-card.out-of-stock { opacity:.5; cursor:not-allowed; filter:grayscale(.5); }
+            .pdv-prod-card.out-of-stock:hover { transform:none; box-shadow:none; border-color:#e5e7eb; }
+            .pdv-prod-badges { position:absolute; top:8px; right:8px; display:flex; gap:3px; }
+            .pdv-badge-fav { background:#fef3c7; color:#d97706; border-radius:5px; width:18px; height:18px; display:flex; align-items:center; justify-content:center; font-size:0.6rem; }
+            .pdv-badge-cart { background:#059669; color:#fff; border-radius:5px; min-width:18px; height:18px; display:flex; align-items:center; justify-content:center; font-size:0.68rem; font-weight:700; padding:0 4px; }
+            .pdv-badge-low { background:#fef3c7; color:#d97706; border-radius:5px; width:18px; height:18px; display:flex; align-items:center; justify-content:center; font-size:0.68rem; font-weight:700; }
+            .pdv-prod-name { font-size:0.83rem; font-weight:700; color:#111827; line-height:1.3; margin-top:2px; padding-right:26px; }
+            .pdv-prod-cat { font-size:0.67rem; color:#9ca3af; font-weight:600; text-transform:uppercase; letter-spacing:.03em; }
+            .pdv-prod-footer { display:flex; justify-content:space-between; align-items:baseline; margin-top:8px; }
+            .pdv-prod-price { font-size:1rem; font-weight:800; color:#059669; font-variant-numeric:tabular-nums; }
+            .pdv-prod-stock { font-size:0.7rem; color:#9ca3af; }
+            .pdv-prod-stock.low { color:#d97706; }
+            .pdv-prod-stock.zero { color:#dc2626; }
+            .pdv-prod-ean { font-size:0.63rem; color:#d1d5db; margin-top:2px; font-family:monospace; letter-spacing:.04em; }
+            .pdv-prod-overlay { position:absolute; inset:0; background:rgba(255,255,255,.85); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:800; color:#dc2626; letter-spacing:.08em; }
+            .pdv-empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:48px 16px; color:#9ca3af; }
+            .pdv-empty-icon { font-size:2.8rem; margin-bottom:12px; }
+            .pdv-empty-title { font-weight:700; color:#6b7280; margin:0; }
+            .pdv-empty-sub { font-size:0.82rem; margin:4px 0 0; }
+            .pdv-products-footer { margin-top:10px; font-size:0.73rem; color:#9ca3af; display:flex; align-items:center; gap:6px; }
+
+            /* ====== CART PANEL ====== */
+            .pdv-cart-panel { background:#0f172a; border-radius:12px; display:flex; flex-direction:column; min-height:600px; overflow:hidden; }
+            .pdv-cart-header { padding:14px 16px; border-bottom:1px solid rgba(255,255,255,.08); display:flex; align-items:center; justify-content:space-between; }
+            .pdv-cart-title { display:flex; align-items:center; gap:8px; color:#f9fafb; font-size:0.95rem; font-weight:700; }
+            .pdv-cart-count { background:#10b981; color:#fff; border-radius:12px; min-width:22px; height:22px; display:flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:800; padding:0 5px; }
+            .pdv-cart-header-actions { display:flex; gap:4px; }
+            .pdv-cart-icon-btn { width:32px; height:32px; border-radius:8px; border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.04); color:#94a3b8; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:0.85rem; transition:all .15s; }
+            .pdv-cart-icon-btn:hover { background:rgba(255,255,255,.1); color:#f9fafb; }
+            .pdv-cart-icon-btn:disabled { opacity:.3; cursor:not-allowed; }
+            .pdv-cart-icon-btn.active { background:rgba(16,185,129,.2); border-color:rgba(16,185,129,.4); color:#10b981; }
+            .pdv-cart-icon-btn.warn { color:#f59e0b; }
+            .pdv-cart-icon-btn.warn:hover { background:rgba(245,158,11,.15); }
+            .pdv-cart-icon-btn.danger { color:#f87171; }
+            .pdv-cart-icon-btn.danger:hover { background:rgba(248,113,113,.15); }
+            .pdv-client-area { border-bottom:1px solid rgba(255,255,255,.07); background:rgba(255,255,255,.03); }
+            .pdv-client-area:not(.pdv-client-placeholder) { padding:10px 14px; }
+            .pdv-client-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+            .pdv-client-label { font-size:0.75rem; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.05em; display:flex; align-items:center; gap:5px; }
+            .pdv-client-remove { background:none; border:none; color:#f87171; font-size:0.75rem; cursor:pointer; padding:0; display:flex; align-items:center; gap:2px; }
+            .pdv-client-select { background:#1e293b; border:1px solid rgba(255,255,255,.1); color:#e2e8f0; font-size:0.82rem; }
+            .pdv-client-select option { background:#1e293b; }
+            .pdv-client-info { display:flex; align-items:center; gap:8px; margin-top:8px; padding:6px 10px; background:rgba(16,185,129,.1); border-radius:8px; border:1px solid rgba(16,185,129,.2); color:#a7f3d0; font-size:0.8rem; font-weight:600; }
+            .pdv-client-pts { margin-left:auto; background:rgba(16,185,129,.2); padding:2px 8px; border-radius:10px; font-size:0.72rem; }
+            .pdv-cart-items { flex:1; overflow-y:auto; padding:8px 0; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.08) transparent; }
+            .pdv-cart-items::-webkit-scrollbar { width:3px; }
+            .pdv-cart-items::-webkit-scrollbar-thumb { background:rgba(255,255,255,.1); border-radius:3px; }
+            .pdv-cart-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:48px 16px; color:#475569; }
+            .pdv-cart-empty-icon { font-size:2.5rem; margin-bottom:12px; }
+            .pdv-cart-empty p { margin:0; font-weight:600; font-size:0.9rem; }
+            .pdv-cart-empty small { font-size:0.75rem; margin-top:4px; color:#334155; }
+            .pdv-cart-item { padding:10px 14px; border-bottom:1px solid rgba(255,255,255,.05); transition:background .12s; }
+            .pdv-cart-item:hover { background:rgba(255,255,255,.02); }
+            .pdv-cart-item-main { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:8px; }
+            .pdv-cart-item-info { flex:1; }
+            .pdv-cart-item-name { display:block; font-size:0.84rem; font-weight:700; color:#f1f5f9; line-height:1.3; }
+            .pdv-cart-item-unit { display:flex; align-items:center; gap:5px; font-size:0.73rem; color:#64748b; margin-top:1px; }
+            .pdv-cart-item-disc { background:rgba(245,158,11,.2); color:#fbbf24; border-radius:4px; padding:1px 5px; font-size:0.67rem; font-weight:700; }
+            .pdv-cart-item-total { font-size:0.9rem; font-weight:800; color:#10b981; font-variant-numeric:tabular-nums; white-space:nowrap; }
+            .pdv-cart-item-controls { display:flex; justify-content:space-between; align-items:center; }
+            .pdv-qty-control { display:flex; align-items:center; background:rgba(255,255,255,.05); border-radius:8px; overflow:hidden; }
+            .pdv-qty-btn { width:30px; height:28px; border:none; background:transparent; color:#94a3b8; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:0.85rem; transition:all .12s; }
+            .pdv-qty-btn:hover { background:rgba(255,255,255,.1); color:#f9fafb; }
+            .pdv-qty-val { min-width:28px; text-align:center; font-size:0.85rem; font-weight:700; color:#f1f5f9; padding:0 4px; }
+            .pdv-item-actions { display:flex; gap:4px; }
+            .pdv-item-btn { width:28px; height:28px; border-radius:7px; border:1px solid rgba(255,255,255,.07); background:transparent; color:#64748b; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:0.78rem; transition:all .12s; }
+            .pdv-item-btn:hover { background:rgba(255,255,255,.08); color:#94a3b8; }
+            .pdv-item-btn.danger { color:#f87171; }
+            .pdv-item-btn.danger:hover { background:rgba(248,113,113,.12); }
+
+            /* ====== CART SUMMARY ====== */
+            .pdv-cart-summary { padding:12px 14px; border-top:1px solid rgba(255,255,255,.07); }
+            .pdv-cart-summary-empty { height:0; }
+            .pdv-summary-row { display:flex; justify-content:space-between; font-size:0.8rem; color:#64748b; margin-bottom:6px; }
+            .pdv-summary-row span { display:flex; align-items:center; gap:5px; }
+            .pdv-summary-row.discount { color:#86efac; }
+            .pdv-remove-disc { background:rgba(248,113,113,.15); border:none; color:#f87171; font-size:0.68rem; font-weight:700; border-radius:5px; padding:1px 6px; cursor:pointer; margin-left:4px; }
+            .pdv-summary-total { display:flex; justify-content:space-between; align-items:baseline; padding-top:10px; margin-top:4px; border-top:1px solid rgba(255,255,255,.08); }
+            .pdv-summary-total span:first-child { font-size:0.85rem; font-weight:700; color:#94a3b8; }
+            .pdv-summary-total span:last-child { font-size:1.4rem; font-weight:900; color:#10b981; font-variant-numeric:tabular-nums; }
+            .pdv-points-hint { display:flex; align-items:center; gap:6px; margin-top:8px; font-size:0.75rem; color:#86efac; background:rgba(16,185,129,.08); border-radius:8px; padding:6px 10px; }
+
+            /* ====== CTA FINALIZAR ====== */
+            .pdv-cart-cta { padding:12px 14px; border-top:1px solid rgba(255,255,255,.07); display:flex; flex-direction:column; gap:8px; }
+            .pdv-finalize-btn { display:flex; justify-content:space-between; align-items:center; padding:13px 16px; border-radius:10px; border:none; background:linear-gradient(135deg,#059669 0%,#10b981 100%); color:#fff; font-weight:800; cursor:pointer; transition:all .15s; box-shadow:0 4px 14px rgba(16,185,129,.3); }
+            .pdv-finalize-btn:hover:not(:disabled) { box-shadow:0 6px 20px rgba(16,185,129,.4); transform:translateY(-1px); }
+            .pdv-finalize-btn:disabled { background:#1e293b; color:#475569; cursor:not-allowed; box-shadow:none; transform:none; }
+            .pdv-finalize-label { display:flex; align-items:center; gap:8px; font-size:0.92rem; }
+            .pdv-finalize-total { font-size:0.95rem; font-variant-numeric:tabular-nums; }
+            .pdv-finalize-hint { font-size:0.72rem; color:rgba(255,255,255,.5); }
+            .pdv-suspend-btn { padding:7px 0; border-radius:8px; border:1px solid rgba(255,255,255,.1); background:transparent; color:#64748b; font-size:0.8rem; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; transition:all .12s; }
+            .pdv-suspend-btn:hover:not(:disabled) { border-color:#f59e0b; color:#f59e0b; background:rgba(245,158,11,.07); }
+            .pdv-suspend-btn:disabled { opacity:.3; cursor:not-allowed; }
+
+            /* ====== KEYBOARD SHORTCUTS
+               FIX BUG: kb-panel era position:fixed; right:20px sobrepondo o carrinho (col-lg-5).
+               Movido para bottom-LEFT e z-index reduzido para não bloquear interações do cart.
+            ====== */
+            .pdv-kb-toggle-wrap { position:fixed; bottom:24px; left:24px; z-index:90; }
+            .pdv-kb-toggle-btn { width:38px; height:38px; border-radius:50%; border:1px solid #e5e7eb; background:#fff; color:#6b7280; box-shadow:0 2px 8px rgba(0,0,0,.1); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:0.95rem; transition:all .15s; }
+            .pdv-kb-toggle-btn:hover { border-color:#10b981; color:#059669; }
+            .pdv-kb-panel { position:fixed; bottom:24px; left:24px; z-index:90; background:#1e293b; border-radius:12px; border:1px solid rgba(255,255,255,.08); box-shadow:0 8px 24px rgba(0,0,0,.3); width:200px; overflow:hidden; }
+            .pdv-kb-header { display:flex; align-items:center; gap:7px; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.06); color:#94a3b8; font-size:0.78rem; font-weight:700; }
+            .pdv-kb-header span { flex:1; }
+            .pdv-kb-close { background:none; border:none; color:#64748b; cursor:pointer; padding:0; width:20px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:4px; font-size:0.9rem; }
+            .pdv-kb-close:hover { color:#f9fafb; background:rgba(255,255,255,.06); }
+            .pdv-kb-list { padding:8px 12px 12px; }
+            .pdv-kb-item { display:flex; justify-content:space-between; align-items:center; padding:5px 0; font-size:0.75rem; color:#64748b; }
+            .pdv-kb-item kbd { background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.1); border-radius:5px; padding:2px 7px; font-size:0.67rem; font-family:monospace; color:#e2e8f0; }
+
+            /* ====== CLIENT PLACEHOLDER ====== */
+            .pdv-client-placeholder { display:flex; align-items:center; gap:8px; cursor:pointer; color:#475569; font-size:0.78rem; font-weight:600; border:1.5px dashed rgba(255,255,255,.12); border-radius:8px; margin:8px 14px; padding:8px 12px; background:rgba(255,255,255,.02); transition:all .15s; }
+            .pdv-client-placeholder:hover { background:rgba(16,185,129,.06); border-color:rgba(16,185,129,.3); color:#10b981; }
+            .pdv-client-placeholder i { font-size:1rem; }
+        `;
+        document.head.appendChild(style);
+    }
+
     // ========================================
     // GESTÃO DO CARRINHO
     // ========================================
@@ -761,8 +895,8 @@ window.pdv = (function() {
         
         const product = window.state.getProducts().find(p => p.id === productId);
         if (!product) {
-            playSound(220, 200); // Error beep
-            window.utils.showToast('Produto não encontrado', 'error');
+            playSound(220, 200);
+            window.utils.showToast('Produto não encontrado', 'danger');
             return;
         }
         
@@ -862,6 +996,7 @@ window.pdv = (function() {
                 cart = [];
                 selectedClient = null;
                 globalDiscount = 0;
+                try { localStorage.removeItem('pdv-cart'); } catch (e) { /* seguro ignorar */ }
                 updateCart();
                 window.utils.showToast('Carrinho limpo', 'info');
             }
@@ -869,15 +1004,14 @@ window.pdv = (function() {
     }
     
     function updateCart() {
-        // Atualiza visualização do carrinho
+        // Atualiza itens
         const cartItemsContainer = document.getElementById('cart-items');
         if (cartItemsContainer) {
             cartItemsContainer.innerHTML = renderCartItems();
         }
         
-        // FIX BUG-08: outerHTML invalida a referência após substituição.
-        // Usar replaceWith() para substituir o nó com segurança.
-        const summaryContainer = cartItemsContainer?.parentElement?.querySelector('.border-top');
+        // Atualiza sumário — usa classe estável em vez de seletor frágil
+        const summaryContainer = document.querySelector('.pdv-cart-summary, .pdv-cart-summary-empty');
         if (summaryContainer) {
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = renderCartSummary();
@@ -892,6 +1026,14 @@ window.pdv = (function() {
             countBadge.textContent = itemCount;
         }
         
+        // Atualiza botões que dependem do estado do carrinho (Suspender / Finalizar)
+        const finalizeBtn = document.querySelector('.pdv-finalize-btn');
+        const suspendBtn  = document.querySelector('.pdv-suspend-btn');
+        const suspendIcon = document.querySelector('.pdv-cart-icon-btn.warn');
+        if (finalizeBtn) finalizeBtn.disabled = cart.length === 0;
+        if (suspendBtn)  suspendBtn.disabled  = cart.length === 0;
+        if (suspendIcon) suspendIcon.disabled  = cart.length === 0;
+
         // Atualiza currentSale
         currentSale = {
             subtotal: calculateSubtotal(),
@@ -900,6 +1042,9 @@ window.pdv = (function() {
             items: cart.length,
             client: selectedClient
         };
+
+        // Persiste carrinho ativo
+        saveCart();
     }
     
     // ========================================
@@ -935,7 +1080,7 @@ window.pdv = (function() {
                                id="discount-amount" 
                                class="form-control" 
                                placeholder="0,00"
-                               oninput="this.value = window.utils.maskCurrencyInput(this.value)">
+                               oninput="let _v=this.value.replace(/\D/g,'');_v=(Number(_v)/100).toFixed(2);this.value=_v.replace('.',',').replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.');" >
                     </div>
                     
                     <div id="discount-preview" class="alert alert-secondary d-none">
@@ -956,7 +1101,7 @@ window.pdv = (function() {
                 function updatePreview() {
                     const type = typeSelect.value;
                     const amountStr = amountInput.value;
-                    const amount = window.utils.parseMonetaryValue(amountStr);
+                    const amount = window.utils.parseCurrencyBR(amountStr);
                     
                     if (amount > 0) {
                         let discountValue = 0;
@@ -993,7 +1138,7 @@ window.pdv = (function() {
             preConfirm: () => {
                 const type = document.getElementById('discount-type').value;
                 const amountStr = document.getElementById('discount-amount').value;
-                const amount = window.utils.parseMonetaryValue(amountStr);
+                const amount = window.utils.parseCurrencyBR(amountStr);
                 
                 if (isNaN(amount) || amount <= 0) {
                     Swal.showValidationMessage('Informe um valor válido');
@@ -1227,7 +1372,7 @@ window.pdv = (function() {
                                id="amount-paid" 
                                class="form-control form-control-lg" 
                                placeholder="Ex: 50,00"
-                               oninput="this.value = window.utils.maskCurrencyInput(this.value)">
+                               oninput="let _v=this.value.replace(/\D/g,'');_v=(Number(_v)/100).toFixed(2);this.value=_v.replace('.',',').replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.');" >
                         <small class="text-muted">Digite o valor recebido</small>
                     </div>
                     
@@ -1291,7 +1436,7 @@ window.pdv = (function() {
         if (amountPaid) {
             amountPaid.addEventListener('input', () => {
                 const paidStr = amountPaid.value;
-                const paid = window.utils.parseMonetaryValue(paidStr);
+                const paid = window.utils.parseCurrencyBR(paidStr);
                 
                 if (!isNaN(paid) && paid >= 0) {
                     const change = paid - total;
@@ -1328,7 +1473,7 @@ window.pdv = (function() {
         
         if (payment === 'dinheiro') {
             const paidStr = document.getElementById('amount-paid').value;
-            const paid = window.utils.parseMonetaryValue(paidStr);
+            const paid = window.utils.parseCurrencyBR(paidStr);
             
             if (isNaN(paid) || paid < total) {
                 Swal.showValidationMessage('Valor recebido insuficiente ou inválido');
@@ -1408,6 +1553,15 @@ window.pdv = (function() {
                         `${client.nome} ganhou ${points} pontos!`,
                         'success'
                     );
+                    // Registra no histórico de fidelidade
+                    if (typeof window.fidelidade_recordPoints === 'function') {
+                        window.fidelidade_recordPoints(
+                            client.id,
+                            client.nome,
+                            points,
+                            `Venda #${sale.id.substring(0, 8)}`
+                        );
+                    }
                 }, 1500);
             }
         }
@@ -1423,6 +1577,8 @@ window.pdv = (function() {
         cart = [];
         selectedClient = null;
         globalDiscount = 0;
+        // Remove carrinho salvo — venda concluída com sucesso, não há o que restaurar
+        try { localStorage.removeItem('pdv-cart'); } catch (e) { /* seguro ignorar */ }
         
         // Som de sucesso
         playSound(880, 200);
@@ -1897,6 +2053,10 @@ window.pdv = (function() {
     function saveSuspendedSales() {
         try {
             localStorage.setItem('pdv-suspended-sales', JSON.stringify(suspendedSales));
+            // Sincroniza com o state central se disponível
+            if (typeof window.state?.setSuspendedSales === 'function') {
+                window.state.setSuspendedSales(suspendedSales);
+            }
         } catch (error) {
             console.error('Erro ao salvar vendas suspensas:', error);
         }
@@ -1926,7 +2086,7 @@ window.pdv = (function() {
                                id="cashier-initial-value" 
                                class="form-control" 
                                placeholder="0,00"
-                               oninput="this.value = window.utils.maskCurrencyInput(this.value)">
+                               oninput="let _v=this.value.replace(/\D/g,'');_v=(Number(_v)/100).toFixed(2);this.value=_v.replace('.',',').replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.');" >
                         <small class="text-muted">Informe o valor em dinheiro disponível</small>
                     </div>
                     
@@ -1944,7 +2104,7 @@ window.pdv = (function() {
             preConfirm: () => {
                 const operator = document.getElementById('cashier-operator').value.trim();
                 const initialStr = document.getElementById('cashier-initial-value').value;
-                const initialValue = window.utils.parseMonetaryValue(initialStr);
+                const initialValue = window.utils.parseCurrencyBR(initialStr);
                 const notes = document.getElementById('cashier-notes').value.trim();
                 
                 if (!operator) {
@@ -2052,7 +2212,7 @@ window.pdv = (function() {
                                id="actual-value" 
                                class="form-control form-control-lg" 
                                placeholder="${window.utils.formatCurrency(expectedValue)}"
-                               oninput="this.value = window.utils.maskCurrencyInput(this.value)"
+                               oninput="let _v=this.value.replace(/\D/g,'');_v=(Number(_v)/100).toFixed(2);this.value=_v.replace('.',',').replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.');" 
                                value="${window.utils.formatCurrency(expectedValue)}">
                     </div>
                     
@@ -2076,7 +2236,7 @@ window.pdv = (function() {
                 
                 actualInput.addEventListener('input', () => {
                     const actualStr = actualInput.value;
-                    const actual = window.utils.parseMonetaryValue(actualStr);
+                    const actual = window.utils.parseCurrencyBR(actualStr);
                     const diff = actual - expectedValue;
                     
                     if (!isNaN(actual) && Math.abs(diff) > 0.01) {
@@ -2100,7 +2260,7 @@ window.pdv = (function() {
             },
             preConfirm: () => {
                 const actualStr = document.getElementById('actual-value').value;
-                const actualValue = window.utils.parseMonetaryValue(actualStr);
+                const actualValue = window.utils.parseCurrencyBR(actualStr);
                 const notes = document.getElementById('closing-notes').value.trim();
                 
                 if (isNaN(actualValue) || actualValue < 0) {
@@ -2127,6 +2287,9 @@ window.pdv = (function() {
                 // Limpa sessão atual
                 cashierSession = null;
                 localStorage.removeItem('pdv-cashier-session');
+                if (typeof window.state?.setPdvSession === 'function') {
+                    window.state.setPdvSession(null);
+                }
                 
                 window.utils.showToast('Caixa fechado com sucesso!', 'success');
                 render();
@@ -2218,7 +2381,7 @@ window.pdv = (function() {
                                id="withdrawal-amount" 
                                class="form-control form-control-lg" 
                                placeholder="0,00"
-                               oninput="this.value = window.utils.maskCurrencyInput(this.value)"
+                               oninput="let _v=this.value.replace(/\D/g,'');_v=(Number(_v)/100).toFixed(2);this.value=_v.replace('.',',').replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.');" 
                                required>
                     </div>
                     
@@ -2246,7 +2409,7 @@ window.pdv = (function() {
             cancelButtonText: 'Cancelar',
             preConfirm: () => {
                 const amountStr = document.getElementById('withdrawal-amount').value;
-                const amount = window.utils.parseMonetaryValue(amountStr);
+                const amount = window.utils.parseCurrencyBR(amountStr);
                 const reason = document.getElementById('withdrawal-reason').value;
                 const notes = document.getElementById('withdrawal-notes').value.trim();
                 
@@ -2303,7 +2466,7 @@ window.pdv = (function() {
                                id="reinforcement-amount" 
                                class="form-control form-control-lg" 
                                placeholder="0,00"
-                               oninput="this.value = window.utils.maskCurrencyInput(this.value)"
+                               oninput="let _v=this.value.replace(/\D/g,'');_v=(Number(_v)/100).toFixed(2);this.value=_v.replace('.',',').replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.');" 
                                required>
                     </div>
                     
@@ -2330,7 +2493,7 @@ window.pdv = (function() {
             cancelButtonText: 'Cancelar',
             preConfirm: () => {
                 const amountStr = document.getElementById('reinforcement-amount').value;
-                const amount = window.utils.parseMonetaryValue(amountStr);
+                const amount = window.utils.parseCurrencyBR(amountStr);
                 const reason = document.getElementById('reinforcement-reason').value;
                 const notes = document.getElementById('reinforcement-notes').value.trim();
                 
@@ -2523,6 +2686,10 @@ window.pdv = (function() {
     function saveCashierSession() {
         try {
             localStorage.setItem('pdv-cashier-session', JSON.stringify(cashierSession));
+            // Sincroniza com o state central se disponível
+            if (typeof window.state?.setPdvSession === 'function') {
+                window.state.setPdvSession(cashierSession);
+            }
         } catch (error) {
             console.error('Erro ao salvar sessão do caixa:', error);
         }
@@ -2648,6 +2815,10 @@ window.pdv = (function() {
         
         try {
             localStorage.setItem('pdv-favorite-products', JSON.stringify(favoriteProducts));
+            // Sincroniza com o state central se disponível
+            if (typeof window.state?.setFavorites === 'function') {
+                window.state.setFavorites(favoriteProducts);
+            }
             window.utils.showToast('Favoritos salvos!', 'success');
         } catch (error) {
             console.error('Erro ao salvar favoritos:', error);
@@ -2674,20 +2845,13 @@ window.pdv = (function() {
     }
     
     function filterCategory(category, el) {
-        // FIX BUG-06: event global implícito substituído por parâmetro explícito `el`
         currentFilter = category;
         
-        // Atualiza UI
-        const buttons = document.querySelectorAll('[onclick*="filterCategory"]');
-        buttons.forEach(btn => {
-            btn.classList.remove('btn-primary');
-            btn.classList.add('btn-outline-primary');
+        // Atualiza UI — remove active de todos, aplica no clicado
+        document.querySelectorAll('.pdv-cat-tab').forEach(btn => {
+            btn.classList.remove('active');
         });
-        
-        if (el) {
-            el.classList.remove('btn-outline-primary');
-            el.classList.add('btn-primary');
-        }
+        if (el) el.classList.add('active');
         
         // Atualiza grid
         const grid = document.getElementById('product-grid');
@@ -2947,7 +3111,7 @@ window.pdv = (function() {
 	    hideQuickActions,
 	    toggleQuickActions,
 	    // Utilitários expostos (opcional)
-	    parseMonetaryValue: window.utils.parseMonetaryValue,
+	    parseCurrencyBR: window.utils.parseCurrencyBR,
 	    formatCurrency: window.utils.formatCurrency
 	};
 })();
