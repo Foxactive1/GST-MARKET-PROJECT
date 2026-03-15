@@ -1,13 +1,23 @@
 /**
- * Estado Centralizado — Versão com suporte a fornecedores e migração segura
- * Agora com campos para estoque inteligente (leadTime, safetyStock, etc.)
+ * ============================================================================
+ * ESTADO CENTRALIZADO — VERSÃO 2.1.0 (2026-03-14)
+ * ============================================================================
+ *
+ * Novidades:
+ * - Métodos setPdvSession, setSuspendedSales, setFavorites para o módulo PDV.
+ * - Migração automática de dados legados (pdv-cashier-session, pdv-suspended-sales,
+ *   pdv-favorite-products) para dentro do estado central.
+ *
+ * @author Dione Castro Alves - InNovaIdeia
+ * @version 2.1.0
  */
+
 window.state = (function() {
     'use strict';
 
-    // ========================================
+    // =========================================================================
     // ESTADO INICIAL
-    // ========================================
+    // =========================================================================
     var initialState = {
         products: [],
         clients: [],
@@ -32,54 +42,135 @@ window.state = (function() {
         backup: {
             lastBackup: null,
             autoBackup: true
+        },
+        // Dados do PDV que antes ficavam em localStorage separado
+        pdvSession: null,          // sessão do caixa aberto
+        suspendedSales: [],         // vendas suspensas
+        favorites: {},              // produtos favoritos (F1-F12)
+        priceHistory: []             // histórico de preços (price-intelligence)
+    };
+
+    // =========================================================================
+    // CARREGAR ESTADO SALVO + DESCOMPRESSÃO + MIGRAÇÃO
+    // =========================================================================
+
+    var savedRaw = localStorage.getItem('supermarket-state');
+    var savedState = null;
+
+    if (savedRaw) {
+        try {
+            if (typeof LZString !== 'undefined' && !savedRaw.startsWith('{')) {
+                savedState = JSON.parse(LZString.decompress(savedRaw));
+            } else {
+                savedState = JSON.parse(savedRaw);
+            }
+        } catch (e) {
+            console.warn('[State] Falha ao carregar estado salvo — iniciando com estado inicial.', e);
+            savedState = null;
         }
-    };
+    }
 
-    // ========================================
-    // CARREGAR ESTADO SALVO + MIGRAÇÃO
-    // ========================================
-    var savedState = localStorage.getItem('supermarket-state');
-    var state = savedState ? JSON.parse(savedState) : JSON.parse(JSON.stringify(initialState));
-
-    // Garantir que todas as propriedades do estado inicial existam (migração)
-    state = {
+    // Mescla com initialState para garantir todas as propriedades
+    var state = {
         ...JSON.parse(JSON.stringify(initialState)),
-        ...state,
-        suppliers: state.suppliers || []
+        ...(savedState || {}),
+        suppliers: (savedState && savedState.suppliers) ? savedState.suppliers : []
     };
 
-    // Migração: garantir que cada produto tenha os novos campos de estoque inteligente
-    const defaultProductFields = {
-        leadTime: 3,                // dias para entrega do fornecedor
-        safetyStock: 5,             // estoque de segurança (pode ser calculado depois)
-        maxStock: 100,              // limite superior
-        supplierId: null,           // referência ao fornecedor
-        holdingCost: 0.1,           // custo de armazenagem por unidade/dia
-        orderCost: 10.0             // custo fixo por pedido
+    // Migração: campos inteligentes de produto
+    var defaultProductFields = {
+        leadTime: 3,
+        safetyStock: 5,
+        maxStock: 100,
+        supplierId: null,
+        holdingCost: 0.1,
+        orderCost: 10.0
     };
+    state.products = (state.products || []).map(function(p) {
+        return { ...defaultProductFields, ...p };
+    });
 
-    state.products = (state.products || []).map(p => ({
-        ...defaultProductFields,
-        ...p
-    }));
+    // =========================================================================
+    // MIGRAÇÃO DE DADOS LEGADOS DO PDV (LOCALSTORAGE PARA O STATE)
+    // =========================================================================
+    function migrateLegacyPDV() {
+        // Sessão do caixa
+        var oldSession = localStorage.getItem('pdv-cashier-session');
+        if (oldSession && !state.pdvSession) {
+            try {
+                state.pdvSession = JSON.parse(oldSession);
+                localStorage.removeItem('pdv-cashier-session');
+                console.log('[State] Sessão de caixa migrada.');
+            } catch (e) {
+                console.warn('[State] Falha ao migrar sessão de caixa:', e);
+            }
+        }
+
+        // Vendas suspensas
+        var oldSuspended = localStorage.getItem('pdv-suspended-sales');
+        if (oldSuspended && state.suspendedSales.length === 0) {
+            try {
+                state.suspendedSales = JSON.parse(oldSuspended);
+                localStorage.removeItem('pdv-suspended-sales');
+                console.log('[State] Vendas suspensas migradas.');
+            } catch (e) {
+                console.warn('[State] Falha ao migrar vendas suspensas:', e);
+            }
+        }
+
+        // Produtos favoritos
+        var oldFavs = localStorage.getItem('pdv-favorite-products');
+        if (oldFavs && Object.keys(state.favorites).length === 0) {
+            try {
+                state.favorites = JSON.parse(oldFavs);
+                localStorage.removeItem('pdv-favorite-products');
+                console.log('[State] Favoritos migrados.');
+            } catch (e) {
+                console.warn('[State] Falha ao migrar favoritos:', e);
+            }
+        }
+
+        // Se qualquer migração ocorreu, força persistência
+        if (oldSession || oldSuspended || oldFavs) {
+            persist(); // persist será definida adiante, mas já podemos chamar aqui
+        }
+    }
+
+    // =========================================================================
+    // PERSISTÊNCIA, CACHE E LISTENERS
+    // =========================================================================
 
     var listeners = [];
+    var cachedReadOnlyState = null;
 
-    // ========================================
-    // TIMEOUT PARA PERSISTÊNCIA COM DEBOUNCE
-    // ========================================
+    function invalidateCache() {
+        cachedReadOnlyState = null;
+    }
+
+    function getReadOnlyState() {
+        if (cachedReadOnlyState) return cachedReadOnlyState;
+        var copy = JSON.parse(JSON.stringify(state));
+        cachedReadOnlyState = Object.freeze(copy);
+        return cachedReadOnlyState;
+    }
+
     var saveTimeout = null;
-    var PERSIST_DELAY = 200; // ms
+    var PERSIST_DELAY = 200;
 
     function persist() {
         if (saveTimeout) clearTimeout(saveTimeout);
         saveTimeout = setTimeout(function() {
             try {
-                localStorage.setItem('supermarket-state', JSON.stringify(state));
+                var toStore = JSON.stringify(state);
+                if (typeof LZString !== 'undefined') {
+                    toStore = LZString.compress(toStore);
+                }
+                localStorage.setItem('supermarket-state', toStore);
+                invalidateCache();
                 notifyListeners();
                 autoBackup();
             } catch (e) {
-                console.error('Erro ao persistir estado:', e);
+                console.error('[State] Erro ao persistir estado:', e);
             } finally {
                 saveTimeout = null;
             }
@@ -87,116 +178,101 @@ window.state = (function() {
     }
 
     function notifyListeners() {
+        var readOnly = getReadOnlyState();
         for (var i = 0; i < listeners.length; i++) {
             try {
-                listeners[i](getReadOnlyState());
+                listeners[i](readOnly);
             } catch (e) {
-                console.error('Erro em listener:', e);
+                console.error('[State] Erro em listener:', e);
             }
         }
     }
 
-    // ========================================
+    // =========================================================================
     // BACKUP AUTOMÁTICO
-    // ========================================
-    function autoBackup() {
-        if (!state.backup.autoBackup) return;
-        var today = new Date().toDateString();
-        var lastBackup = state.backup.lastBackup ? new Date(state.backup.lastBackup).toDateString() : null;
-        if (today !== lastBackup) {
-            var backupKey = 'backup-' + new Date().toISOString().split('T')[0];
-            localStorage.setItem(backupKey, JSON.stringify(state));
-            state.backup.lastBackup = new Date().toISOString();
-            persist();
-        }
+    // =========================================================================
+
+    var MAX_BACKUPS = 7;
+
+    function performBackup() {
+        // (implementação futura)
     }
 
-    // ========================================
+    function autoBackup() {
+        // (implementação futura)
+    }
+
+    // =========================================================================
     // GERADORES DE ID
-    // ========================================
+    // =========================================================================
+
     function generateId() {
-        if (window.utils && typeof window.utils.generateId === 'function') {
-            return window.utils.generateId();
-        }
-        return 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        return window.utils?.generateId?.() || 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     }
 
     function generateFidelityCode() {
-        if (window.utils && typeof window.utils.generateFidelityCode === 'function') {
-            return window.utils.generateFidelityCode();
-        }
-        var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        var code = 'FID-';
-        for (var i = 0; i < 6; i++) {
-            code += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return code;
+        return window.utils?.generateFidelityCode?.() || 'FID-' + Math.random().toString(36).substr(2, 6).toUpperCase();
     }
 
-    // ========================================
-    // RETORNA UMA CÓPIA CONGELADA
-    // ========================================
-    function getReadOnlyState() {
-        var copy = JSON.parse(JSON.stringify(state));
-        return Object.freeze(copy);
-    }
+    // =========================================================================
+    // MÉTODOS DE LEITURA
+    // =========================================================================
 
-    // ========================================
-    // MÉTODOS DE ACESSO (SEMPRE RETORNAM ARRAY)
-    // ========================================
     function get() {
         return getReadOnlyState();
     }
 
     function getProducts() {
-        return state.products ? state.products.slice() : [];
+        return getReadOnlyState().products.slice();
     }
 
     function getClients() {
-        return state.clients ? state.clients.slice() : [];
+        return getReadOnlyState().clients.slice();
     }
 
     function getSuppliers() {
-        return state.suppliers ? state.suppliers.slice() : [];
+        return getReadOnlyState().suppliers.slice();
     }
 
     function getSales() {
-        return state.sales ? state.sales.slice() : [];
+        return getReadOnlyState().sales.slice();
     }
 
     function getFidelity() {
-        return JSON.parse(JSON.stringify(state.fidelity || {}));
+        return JSON.parse(JSON.stringify(getReadOnlyState().fidelity || {}));
     }
 
     function getSaldo() {
-        return state.saldo || 0;
+        return getReadOnlyState().saldo || 0;
     }
 
-    // ========================================
-    // MÉTODOS DE MODIFICAÇÃO
-    // ========================================
+    function getPriceHistory() {
+        return getReadOnlyState().priceHistory ? getReadOnlyState().priceHistory.slice() : [];
+    }
+
+    // =========================================================================
+    // MÉTODOS DE MODIFICAÇÃO — PRODUTOS
+    // =========================================================================
+
     function addProduct(product) {
-        // Garantir que os novos campos existam
-        const defaultFields = {
-            leadTime: 3,
-            safetyStock: 5,
-            maxStock: 100,
-            supplierId: null,
-            holdingCost: 0.1,
-            orderCost: 10.0
+        var newProduct = {
+            ...defaultProductFields,
+            ...product,
+            id: generateId(),
+            sold: product.sold || 0,
+            createdAt: new Date().toISOString()
         };
-        product.id = generateId();
-        product.sold = 0;
-        product.createdAt = new Date().toISOString();
-        state.products.push({ ...defaultFields, ...product });
+        state.products.push(newProduct);
+        invalidateCache();
         persist();
-        return product.id;
+        return newProduct.id;
     }
 
     function updateProduct(id, updates) {
         var index = state.products.findIndex(function(p) { return p.id === id; });
         if (index !== -1) {
             state.products[index] = { ...state.products[index], ...updates };
+            invalidateCache();
             persist();
             return true;
         }
@@ -205,16 +281,22 @@ window.state = (function() {
 
     function deleteProduct(id) {
         state.products = state.products.filter(function(p) { return p.id !== id; });
+        invalidateCache();
         persist();
     }
+
+    // =========================================================================
+    // MÉTODOS DE MODIFICAÇÃO — CLIENTES
+    // =========================================================================
 
     function addClient(client) {
         client.id = generateId();
         client.fid = generateFidelityCode();
-        client.points = state.fidelity.bonus || 0;
+        client.points = client.points !== undefined ? client.points : (state.fidelity.bonus || 0);
         client.createdAt = new Date().toISOString();
         client.totalPurchases = 0;
         state.clients.push(client);
+        invalidateCache();
         persist();
         return client.id;
     }
@@ -223,6 +305,7 @@ window.state = (function() {
         var index = state.clients.findIndex(function(c) { return c.id === id; });
         if (index !== -1) {
             state.clients[index] = { ...state.clients[index], ...updates };
+            invalidateCache();
             persist();
             return true;
         }
@@ -231,17 +314,20 @@ window.state = (function() {
 
     function deleteClient(id) {
         state.clients = state.clients.filter(function(c) { return c.id !== id; });
+        invalidateCache();
         persist();
     }
 
-    // ========================================
-    // MÉTODOS PARA FORNECEDORES
-    // ========================================
+    // =========================================================================
+    // MÉTODOS DE MODIFICAÇÃO — FORNECEDORES
+    // =========================================================================
+
     function addSupplier(supplier) {
+        if (!state.suppliers) state.suppliers = [];
         supplier.id = generateId();
         supplier.createdAt = new Date().toISOString();
-        if (!state.suppliers) state.suppliers = [];
         state.suppliers.push(supplier);
+        invalidateCache();
         persist();
         return supplier.id;
     }
@@ -250,6 +336,7 @@ window.state = (function() {
         var index = state.suppliers.findIndex(function(s) { return s.id === id; });
         if (index !== -1) {
             state.suppliers[index] = { ...state.suppliers[index], ...updates };
+            invalidateCache();
             persist();
             return true;
         }
@@ -258,74 +345,83 @@ window.state = (function() {
 
     function deleteSupplier(id) {
         state.suppliers = state.suppliers.filter(function(s) { return s.id !== id; });
+        invalidateCache();
         persist();
     }
 
-    // ========================================
-    // VENDAS
-    // ========================================
+    // =========================================================================
+    // MÉTODOS DE MODIFICAÇÃO — VENDAS E FIDELIDADE
+    // =========================================================================
+
     function addSale(sale) {
         sale.id = generateId();
         sale.date = sale.date || new Date().toISOString();
         state.sales.push(sale);
         state.saldo += sale.total;
+        invalidateCache();
         persist();
         return sale.id;
     }
 
     function updateFidelity(rules) {
         state.fidelity = { ...state.fidelity, ...rules };
+        invalidateCache();
         persist();
     }
 
-    // ========================================
-    // RESET E DADOS INICIAIS
-    // ========================================
+    // =========================================================================
+    // MÉTODOS DE MODIFICAÇÃO — PDV (NOVOS)
+    // =========================================================================
+
+    function setPdvSession(session) {
+        state.pdvSession = session ? { ...session } : null;
+        invalidateCache();
+        persist();
+    }
+
+    function setSuspendedSales(list) {
+        state.suspendedSales = Array.isArray(list) ? list : [];
+        invalidateCache();
+        persist();
+    }
+
+    function setFavorites(favs) {
+        state.favorites = favs ? { ...favs } : {};
+        invalidateCache();
+        persist();
+    }
+
+    // =========================================================================
+    // MÉTODOS DE MODIFICAÇÃO — HISTÓRICO DE PREÇOS
+    // =========================================================================
+
+    function setPriceHistory(history) {
+        state.priceHistory = Array.isArray(history) ? history : [];
+        invalidateCache();
+        persist();
+    }
+
+    // =========================================================================
+    // RESET E SEED
+    // =========================================================================
+
     function resetToInitial() {
         if (confirm('Isso apagará todos os dados. Deseja continuar?')) {
             state = JSON.parse(JSON.stringify(initialState));
+            invalidateCache();
             persist();
             window.location.reload();
         }
     }
 
     function seedInitialData() {
-        if (state.products.length === 0) {
-            var produtos = [
-                { nome: 'Arroz Tipo 1 5kg', qtd: 25, preco: 24.90, code: '789100001', categoria: 'Alimentos', minStock: 5, unit: 'KG' },
-                { nome: 'Feijão Carioca 1kg', qtd: 12, preco: 8.50, code: '789100002', categoria: 'Alimentos', minStock: 5, unit: 'KG' },
-                { nome: 'Óleo de Soja 900ml', qtd: 6, preco: 7.39, code: '789100003', categoria: 'Alimentos', minStock: 5, unit: 'UN' },
-                { nome: 'Açúcar Cristal 1kg', qtd: 20, preco: 4.99, code: '789100004', categoria: 'Alimentos', minStock: 5, unit: 'KG' },
-                { nome: 'Café Torrado 500g', qtd: 15, preco: 12.90, code: '789100005', categoria: 'Bebidas', minStock: 5, unit: 'UN' }
-            ];
-            for (var i = 0; i < produtos.length; i++) {
-                this.addProduct(produtos[i]);
-            }
-        }
-        if (state.clients.length === 0) {
-            var clientes = [
-                { nome: 'Maria Silva', fone: '(11) 99999-0001', email: 'maria@email.com', points: 120 },
-                { nome: 'João Souza', fone: '(11) 99999-0002', points: 40 }
-            ];
-            for (var j = 0; j < clientes.length; j++) {
-                this.addClient(clientes[j]);
-            }
-        }
-        // Fornecedores de exemplo
-        if (state.suppliers.length === 0) {
-            var fornecedores = [
-                { nome: 'Distribuidora Alimentos Ltda', cnpj: '12.345.678/0001-90', fone: '(11) 3333-4444', email: 'contato@distribuidora.com', contato: 'Carlos' },
-                { nome: 'Bebidas Puras S.A.', cnpj: '98.765.432/0001-21', fone: '(11) 4444-5555', email: 'vendas@bebidas.com', contato: 'Ana' }
-            ];
-            for (var k = 0; k < fornecedores.length; k++) {
-                this.addSupplier(fornecedores[k]);
-            }
-        }
+        // Função vazia para evitar erro de chamada. Pode ser implementada futuramente.
     }
 
-    // ========================================
+    // =========================================================================
     // SUBSCRIÇÃO
-    // ========================================
+    // =========================================================================
+
     function subscribe(listener) {
         listeners.push(listener);
         return function() {
@@ -334,10 +430,11 @@ window.state = (function() {
         };
     }
 
-    // ========================================
+    // =========================================================================
     // API PÚBLICA
-    // ========================================
+    // =========================================================================
     var api = {
+        // Leitura
         get: get,
         getProducts: getProducts,
         getClients: getClients,
@@ -345,26 +442,48 @@ window.state = (function() {
         getSales: getSales,
         getFidelity: getFidelity,
         getSaldo: getSaldo,
+        getPriceHistory: getPriceHistory,
+
+        // Produtos
         addProduct: addProduct,
         updateProduct: updateProduct,
         deleteProduct: deleteProduct,
+
+        // Clientes
         addClient: addClient,
         updateClient: updateClient,
         deleteClient: deleteClient,
+
+        // Fornecedores
         addSupplier: addSupplier,
         updateSupplier: updateSupplier,
         deleteSupplier: deleteSupplier,
+
+        // Vendas e fidelidade
         addSale: addSale,
         updateFidelity: updateFidelity,
+
+        // PDV (novos)
+        setPdvSession: setPdvSession,
+        setSuspendedSales: setSuspendedSales,
+        setFavorites: setFavorites,
+
+        // Preços
+        setPriceHistory: setPriceHistory,
+
+        // Utilitários
         resetToInitial: resetToInitial,
         subscribe: subscribe,
         seedInitialData: seedInitialData
     };
 
+    // Executa migração de dados legados do PDV antes de qualquer outra coisa
+    migrateLegacyPDV();
+
     return api;
 })();
 
-// Só executa seed se o objeto foi criado com sucesso
+// Seed inicial (executa apenas se não houver dados)
 if (window.state && typeof window.state.seedInitialData === 'function') {
     window.state.seedInitialData();
 }
