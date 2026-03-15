@@ -2,6 +2,7 @@
  * Componentes de Modais
  * Responsável por gerenciar todos os modais do sistema
  * Versão integrada com utils aprimorados (máscaras, validações, formatação)
+ * AGORA COM CAMPO DE FORNECEDOR NO MODAL DE PRODUTO
  */
 
 window.modals = (function() {
@@ -22,10 +23,10 @@ window.modals = (function() {
 
     let currentProductId = null;
     let currentClientId = null;
-    let currentSupplierId = null;   // <-- novo
+    let currentSupplierId = null;
 
     // ========================================
-    // MODAL DE PRODUTO
+    // MODAL DE PRODUTO (com fornecedor)
     // ========================================
     function openProductModal(productId = null) {
         if (!checkDependencies()) return;
@@ -45,6 +46,8 @@ window.modals = (function() {
 
     function showProductModal(product) {
         const isEditing = !!product;
+        // Obter lista de fornecedores para o select
+        const suppliers = window.state.getSuppliers() || [];
 
         Swal.fire({
             title: isEditing ? 'Editar Produto' : 'Novo Produto',
@@ -109,6 +112,20 @@ window.modals = (function() {
                                    oninput="this.value = window.utils.maskCurrencyInput(this.value)">
                         </div>
                     </div>
+                    
+                    <!-- NOVO: Campo de fornecedor -->
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-12">
+                            <label class="form-label">Fornecedor</label>
+                            <select id="prod-supplier" class="form-select">
+                                <option value="">Nenhum</option>
+                                ${suppliers.map(s => 
+                                    `<option value="${s.id}" ${product?.supplierId === s.id ? 'selected' : ''}>${s.nome}</option>`
+                                ).join('')}
+                            </select>
+                            <small class="text-muted">Selecione o fornecedor para integração com o estoque inteligente.</small>
+                        </div>
+                    </div>
                 </div>
             `,
             showCancelButton: true,
@@ -125,9 +142,10 @@ window.modals = (function() {
                 const unit = document.getElementById('prod-unit').value;
                 const costStr = document.getElementById('prod-cost').value;
                 const cost = costStr ? window.utils.parseMonetaryValue(costStr) : null;
+                const supplierId = document.getElementById('prod-supplier').value || null;
 
                 const data = {
-                    nome, code, categoria, qtd, preco, minStock, unit, cost
+                    nome, code, categoria, qtd, preco, minStock, unit, cost, supplierId
                 };
 
                 if (!window.utils.validateProduct(data)) {
@@ -153,7 +171,7 @@ window.modals = (function() {
     }
 
     // ========================================
-    // MODAL DE CLIENTE
+    // MODAL DE CLIENTE (mantido original)
     // ========================================
     function openClientModal(clientId = null) {
         if (!checkDependencies()) return;
@@ -267,7 +285,7 @@ window.modals = (function() {
     }
 
     // ========================================
-    // MODAL DE FORNECEDOR
+    // MODAL DE FORNECEDOR (mantido original)
     // ========================================
     function openSupplierModal(supplierId = null) {
         if (!checkDependencies()) return;
@@ -375,7 +393,6 @@ window.modals = (function() {
                     window.utils.showToast('Fornecedor cadastrado!', 'success');
                 }
 
-                // Se estiver na view de fornecedores, recarrega
                 const currentView = window.app?.getCurrentView();
                 if (currentView === 'fornecedores') {
                     window.fornecedores?.render();
@@ -423,6 +440,6 @@ window.modals = (function() {
     return {
         openProductModal,
         openClientModal,
-        openSupplierModal   // <-- AGORA EXPOSTA
+        openSupplierModal
     };
 })();
