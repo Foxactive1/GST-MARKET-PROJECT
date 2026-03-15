@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Storage Cleaner — Supermercado Pro</title>
+  <style>
+    /* ── Fonte ── */
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+    /* ── Variáveis ── */
+    :root {
+      --bg:         #0a0e1a;
+      --bg-card:    #0f1525;
+      --bg-hover:   #151d35;
+      --border:     #1e2d55;
+      --border-glow:#2a45a0;
+      --text:       #e2e8f8;
+      --text-muted: #5a6a9a;
+      --text-dim:   #3a4a7a;
+      --primary:    #3b82f6;
+      --primary-glow: rgba(59,130,246,0.15);
+      --danger:     #ef4444;
+      --danger-glow: rgba(239,68,68,0.15);
+      --warning:    #f59e0b;
+      --warning-glow: rgba(245,158,11,0.12);
+      --success:    #10b981;
+      --success-glow: rgba(16,185,129,0.15);
+      --purple:     #8b5cf6;
+      --mono:       'JetBrains Mono', monospace;
+      --sans:       'Space Grotesk', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Grade de fundo ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(59,130,246,.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Glow radial no topo ── */
+    body::after {
+      content: '';
+      position: fixed;
+      top: -120px; left: 50%;
+      transform: translateX(-50%);
+      width: 700px; height: 400px;
+      background: radial-gradient(ellipse, rgba(59,130,246,.12) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Layout ── */
+    .wrap {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    /* ── Header ── */
+    .header {
+      text-align: center;
+      margin-bottom: 52px;
+    }
+    .header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: .7rem;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--primary);
+      background: var(--primary-glow);
+      border: 1px solid rgba(59,130,246,.25);
+      border-radius: 100px;
+      padding: 5px 14px;
+      margin-bottom: 20px;
+    }
+    .header-badge::before { content: '●'; animation: pulse 2s ease infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    .header h1 {
+      font-size: clamp(1.8rem, 5vw, 2.8rem);
+      font-weight: 700;
+      letter-spacing: -.02em;
+      line-height: 1.1;
+      margin-bottom: 12px;
+    }
+    .header h1 span { color: var(--primary); }
+
+    .header p {
+      color: var(--text-muted);
+      font-size: .95rem;
+      max-width: 480px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* ── Seção ── */
+    .section-label {
+      font-family: var(--mono);
+      font-size: .65rem;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      transition: border-color .2s;
+    }
+    .card:hover { border-color: var(--border-glow); }
+
+    /* ── Cabeçalho do card de grupo ── */
+    .group-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+      transition: background .15s;
+    }
+    .group-header:hover { background: var(--bg-hover); }
+
+    .group-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: .85rem;
+      font-weight: 600;
+    }
+    .group-icon {
+      width: 30px; height: 30px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .95rem;
+    }
+    .group-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .badge {
+      font-family: var(--mono);
+      font-size: .65rem;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 100px;
+      letter-spacing: .04em;
+    }
+    .badge-size { background: rgba(139,92,246,.15); color: var(--purple); border: 1px solid rgba(139,92,246,.2); }
+    .badge-count { background: rgba(59,130,246,.12); color: var(--primary); border: 1px solid rgba(59,130,246,.2); }
+
+    .chevron {
+      color: var(--text-dim);
+      font-size: .7rem;
+      transition: transform .2s;
+    }
+    .chevron.open { transform: rotate(180deg); }
+
+    /* ── Lista de chaves ── */
+    .key-list {
+      display: none;
+      padding: 6px 0;
+    }
+    .key-list.visible { display: block; }
+
+    .key-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 18px;
+      border-bottom: 1px solid rgba(30,45,85,.5);
+      transition: background .12s;
+    }
+    .key-row:last-child { border-bottom: none; }
+    .key-row:hover { background: var(--bg-hover); }
+
+    .key-cb {
+      appearance: none;
+      width: 16px; height: 16px;
+      border: 1.5px solid var(--border-glow);
+      border-radius: 4px;
+      cursor: pointer;
+      flex-shrink: 0;
+      position: relative;
+      transition: all .15s;
+      background: transparent;
+    }
+    .key-cb:checked {
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+    .key-cb:checked::after {
+      content: '✓';
+      position: absolute;
+      inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .6rem;
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .key-name {
+      font-family: var(--mono);
+      font-size: .78rem;
+      color: var(--text);
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .key-name.backup { color: var(--warning); }
+    .key-name.auth   { color: var(--purple);  }
+
+    .key-size {
+      font-family: var(--mono);
+      font-size: .65rem;
+      color: var(--text-muted);
+      text-align: right;
+      min-width: 52px;
+    }
+    .key-size.large { color: var(--warning); }
+    .key-size.empty { color: var(--text-dim); }
+
+    /* ── Status bar ── */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 18px;
+      margin-bottom: 24px;
+      font-size: .82rem;
+    }
+    .status-left  { display: flex; gap: 24px; }
+    .status-item  { display: flex; align-items: center; gap: 8px; color: var(--text-muted); }
+    .status-val   { font-family: var(--mono); font-weight: 700; color: var(--text); }
+    .status-val.warn { color: var(--warning); }
+
+    /* ── Botões de ação ── */
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 32px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: .82rem;
+      font-weight: 600;
+      font-family: var(--sans);
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all .15s;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    .btn-primary:not(:disabled):hover {
+      background: #2563eb;
+      box-shadow: 0 0 20px rgba(59,130,246,.35);
+    }
+
+    .btn-danger {
+      background: var(--danger-glow);
+      color: var(--danger);
+      border-color: rgba(239,68,68,.3);
+    }
+    .btn-danger:not(:disabled):hover {
+      background: rgba(239,68,68,.25);
+      box-shadow: 0 0 16px rgba(239,68,68,.25);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-muted);
+      border-color: var(--border);
+    }
+    .btn-ghost:not(:disabled):hover {
+      background: var(--bg-hover);
+      color: var(--text);
+      border-color: var(--border-glow);
+    }
+
+    .btn-warning {
+      background: var(--warning-glow);
+      color: var(--warning);
+      border-color: rgba(245,158,11,.3);
+    }
+    .btn-warning:not(:disabled):hover {
+      background: rgba(245,158,11,.22);
+    }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 28px; right: 28px;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: .82rem;
+      font-weight: 600;
+      z-index: 9999;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: all .25s ease;
+      pointer-events: none;
+      max-width: 320px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+    #toast.success { background: var(--success-glow); color: var(--success); border: 1px solid rgba(16,185,129,.3); }
+    #toast.danger  { background: var(--danger-glow);  color: var(--danger);  border: 1px solid rgba(239,68,68,.3); }
+    #toast.info    { background: var(--primary-glow); color: var(--primary); border: 1px solid rgba(59,130,246,.3); }
+    #toast.warning { background: var(--warning-glow); color: var(--warning); border: 1px solid rgba(245,158,11,.3); }
+
+    /* ── Modal de confirmação ── */
+    #modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.65);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    #modal-overlay.show { display: flex; }
+
+    #modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border-glow);
+      border-radius: 16px;
+      padding: 28px;
+      max-width: 440px;
+      width: 100%;
+      animation: modalIn .2s ease;
+    }
+    @keyframes modalIn {
+      from { opacity:0; transform:scale(.95) translateY(8px); }
+      to   { opacity:1; transform:scale(1)   translateY(0); }
+    }
+    .modal-icon {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem;
+      margin-bottom: 16px;
+    }
+    .modal-icon.danger { background: var(--danger-glow); }
+    #modal h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 8px; }
+    #modal p  { font-size: .85rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 20px; }
+    #modal-list {
+      background: rgba(0,0,0,.3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    #modal-list li {
+      font-family: var(--mono);
+      font-size: .72rem;
+      color: var(--text-muted);
+      line-height: 1.8;
+      list-style: none;
+    }
+    #modal-list li::before { content: '— '; color: var(--text-dim); }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+    /* ── Log ── */
+    #log-section { margin-top: 32px; }
+    #log {
+      background: rgba(0,0,0,.4);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-family: var(--mono);
+      font-size: .72rem;
+      line-height: 1.8;
+      max-height: 220px;
+      overflow-y: auto;
+      color: var(--text-muted);
+    }
+    .log-entry { display: flex; gap: 12px; }
+    .log-time  { color: var(--text-dim); min-width: 64px; }
+    .log-msg.ok   { color: var(--success); }
+    .log-msg.err  { color: var(--danger); }
+    .log-msg.info { color: var(--primary); }
+    .log-msg.warn { color: var(--warning); }
+
+    /* ── Empty state ── */
+    .empty {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--text-dim);
+      font-size: .85rem;
+    }
+    .empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-glow); border-radius: 99px; }
+  </style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-badge">Supermercado Pro · GST Tech</div>
+    <h1>Storage <span>Cleaner</span></h1>
+    <p>Inspecione, selecione e remova dados do localStorage desta aplicação com controle granular.</p>
+  </header>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <div class="status-left">
+      <div class="status-item">
+        <span>Chaves detectadas</span>
+        <span class="status-val" id="stat-count">—</span>
+      </div>
+      <div class="status-item">
+        <span>Espaço usado</span>
+        <span class="status-val" id="stat-size">—</span>
+      </div>
+      <div class="status-item">
+        <span>Selecionadas</span>
+        <span class="status-val" id="stat-sel">0</span>
+      </div>
+    </div>
+    <button class="btn btn-ghost" onclick="App.scan()" title="Reescanear localStorage">
+      ↻ Reescanear
+    </button>
+  </div>
+
+  <!-- Ações globais -->
+  <div class="actions">
+    <button class="btn btn-danger" id="btn-delete-sel" disabled onclick="App.confirmDelete('selected')">
+      🗑 Excluir selecionadas
+    </button>
+    <button class="btn btn-warning" onclick="App.confirmDelete('backups')">
+      🧹 Limpar backups antigos
+    </button>
+    <button class="btn btn-ghost" onclick="App.selectAll()">☑ Selecionar todas</button>
+    <button class="btn btn-ghost" onclick="App.deselectAll()">☐ Desmarcar todas</button>
+    <button class="btn btn-ghost" onclick="App.exportSnapshot()">⬇ Exportar snapshot</button>
+  </div>
+
+  <!-- Grupos de chaves -->
+  <div class="section-label">Chaves por grupo</div>
+  <div id="groups-container">
+    <div class="empty"><div class="empty-icon">🔍</div>Escaneando...</div>
+  </div>
+
+  <!-- Log de operações -->
+  <div id="log-section">
+    <div class="section-label" style="margin-top:28px;">Log de operações</div>
+    <div id="log"><span style="color:var(--text-dim);">// aguardando ações...</span></div>
+  </div>
+
+</div>
+
+<!-- Modal de confirmação -->
+<div id="modal-overlay">
+  <div id="modal">
+    <div class="modal-icon danger">⚠️</div>
+    <h3 id="modal-title">Confirmar exclusão</h3>
+    <p id="modal-desc"></p>
+    <ul id="modal-list"></ul>
+    <div class="modal-actions">
+      <button class="btn btn-ghost"   onclick="App.closeModal()">Cancelar</button>
+      <button class="btn btn-danger"  id="modal-confirm">Confirmar exclusão</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+/* ═══════════════════════════════════════════════
+   CONFIGURAÇÃO DE GRUPOS E CHAVES CONHECIDAS
+═══════════════════════════════════════════════ */
+const GROUPS = [
+  {
+    id:    'core',
+    label: 'Estado Principal',
+    icon:  '🗄',
+    color: '#3b82f6',
+    desc:  'Dados do sistema: produtos, clientes, vendas, fornecedores',
+    keys:  ['supermarket-state']
+  },
+  {
+    id:    'pdv',
+    label: 'PDV & Caixa',
+    icon:  '🖥',
+    color: '#10b981',
+    desc:  'Sessão do caixa, carrinho ativo, vendas suspensas e favoritos',
+    keys:  [
+      'pdv-cashier-session',
+      'pdv-cashier-history',
+      'pdv-cart',
+      'pdv-suspended-sales',
+      'pdv-favorite-products',
+      'pdv-hide-quick-actions'
+    ]
+  },
+  {
+    id:    'estoque',
+    label: 'Estoque',
+    icon:  '📦',
+    color: '#f59e0b',
+    desc:  'Alertas de estoque e histórico de movimentações',
+    keys:  ['stock-alerts', 'stock-alerts-previous', 'stock-movements']
+  },
+  {
+    id:    'price',
+    label: 'Inteligência de Preços',
+    icon:  '📊',
+    color: '#8b5cf6',
+    desc:  'Histórico de pesquisa de preços de mercado',
+    keys:  ['price_intelligence_history']
+  },
+  {
+    id:    'auth',
+    label: 'Autenticação',
+    icon:  '🔐',
+    color: '#ef4444',
+    desc:  'Token de sessão do usuário logado',
+    keys:  ['supermercado_auth']
+  },
+  {
+    id:    'prefs',
+    label: 'Preferências',
+    icon:  '⚙️',
+    color: '#6b7280',
+    desc:  'Tema, auto-switch e configurações de UI',
+    keys:  ['theme', 'autoSwitch']
+  }
+];
+
+/* ═══════════════════════════════════════════════
+   UTILITÁRIOS
+═══════════════════════════════════════════════ */
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024)       return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+function getKeySize(key) {
+  try {
+    const val = localStorage.getItem(key);
+    if (val === null) return 0;
+    return (key.length + val.length) * 2; // UTF-16 aproximado
+  } catch { return 0; }
+}
+
+function now() {
+  return new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
+function isBackupKey(key) {
+  return /^backup-\d{4}-\d{2}-\d{2}$/.test(key);
+}
+
+/* ═══════════════════════════════════════════════
+   LOG
+═══════════════════════════════════════════════ */
+const Log = {
+  el: null,
+  init() { this.el = document.getElementById('log'); },
+  add(msg, type = 'info') {
+    if (!this.el) return;
+    // Limpa placeholder inicial
+    if (this.el.querySelector('span')) this.el.innerHTML = '';
+    const row = document.createElement('div');
+    row.className = 'log-entry';
+    row.innerHTML = `<span class="log-time">${now()}</span><span class="log-msg ${type}">${msg}</span>`;
+    this.el.appendChild(row);
+    this.el.scrollTop = this.el.scrollHeight;
+  }
+};
+
+/* ═══════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════ */
+const Toast = {
+  el: null, _t: null,
+  init() { this.el = document.getElementById('toast'); },
+  show(msg, type = 'info', icon = '') {
+    if (!this.el) return;
+    clearTimeout(this._t);
+    this.el.className = `show ${type}`;
+    this.el.innerHTML = (icon ? `${icon} ` : '') + msg;
+    this._t = setTimeout(() => { this.el.className = ''; }, 3200);
+  }
+};
+
+/* ═══════════════════════════════════════════════
+   APP PRINCIPAL
+═══════════════════════════════════════════════ */
+const App = {
+
+  /* Chaves presentes no localStorage neste momento */
+  allKeys: [],
+  selected: new Set(),
+  pendingAction: null,   // função a chamar ao confirmar modal
+
+  /* ── Inicialização ── */
+  init() {
+    Log.init();
+    Toast.init();
+    this.scan();
+    document.getElementById('modal-overlay')
+      .addEventListener('click', e => {
+        if (e.target === e.currentTarget) this.closeModal();
+      });
+    Log.add('Storage Cleaner iniciado', 'info');
+  },
+
+  /* ── Escanear localStorage ── */
+  scan() {
+    this.selected.clear();
+    this.allKeys = [];
+
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        this.allKeys.push(localStorage.key(i));
+      }
+    } catch (e) {
+      Log.add('Erro ao acessar localStorage: ' + e.message, 'err');
+      Toast.show('Erro ao acessar localStorage', 'danger', '⚠');
+      return;
+    }
+
+    this.render();
+    this.updateStats();
+    Log.add(`Scan concluído — ${this.allKeys.length} chave(s) encontrada(s)`, 'ok');
+  },
+
+  /* ── Render principal ── */
+  render() {
+    const container = document.getElementById('groups-container');
+
+    // Chaves fora dos grupos conhecidos
+    const knownKeys   = new Set(GROUPS.flatMap(g => g.keys));
+    const backupKeys  = this.allKeys.filter(isBackupKey);
+    const unknownKeys = this.allKeys.filter(k => !knownKeys.has(k) && !isBackupKey(k));
+
+    // Monta lista de grupos (só exibe se ao menos uma chave do grupo existe)
+    const groupsToShow = GROUPS
+      .map(g => ({ ...g, present: g.keys.filter(k => this.allKeys.includes(k)) }))
+      .filter(g => g.present.length > 0);
+
+    if (backupKeys.length > 0) {
+      groupsToShow.push({
+        id: 'backups', label: 'Backups Automáticos', icon: '💾',
+        color: '#f59e0b', desc: `${backupKeys.length} snapshot(s) diário(s) — removíveis com segurança`,
+        present: backupKeys
+      });
+    }
+
+    if (unknownKeys.length > 0) {
+      groupsToShow.push({
+        id: 'unknown', label: 'Outras chaves', icon: '❓',
+        color: '#6b7280', desc: 'Chaves não reconhecidas pelo sistema',
+        present: unknownKeys
+      });
+    }
+
+    if (groupsToShow.length === 0) {
+      container.innerHTML = `
+        <div class="empty">
+          <div class="empty-icon">✨</div>
+          localStorage está vazio — nada a limpar.
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = groupsToShow.map(g => this._renderGroup(g)).join('');
+
+    // Rebind checkboxes
+    container.querySelectorAll('.key-cb').forEach(cb => {
+      cb.addEventListener('change', () => this._onCheck(cb));
+    });
+
+    // Bind toggles dos grupos
+    container.querySelectorAll('.group-header').forEach(h => {
+      h.addEventListener('click', e => {
+        if (e.target.classList.contains('key-cb')) return;
+        const body    = h.nextElementSibling;
+        const chevron = h.querySelector('.chevron');
+        body.classList.toggle('visible');
+        chevron.classList.toggle('open');
+      });
+    });
+  },
+
+  _renderGroup(group) {
+    const totalSize  = group.present.reduce((s, k) => s + getKeySize(k), 0);
+    const sizeStr    = formatBytes(totalSize);
+    const sizeLarge  = totalSize > 100_000;
+
+    const rows = group.present.map(key => {
+      const sz      = getKeySize(key);
+      const isCheck = this.selected.has(key);
+      const isBack  = isBackupKey(key);
+      const isAuth  = key === 'supermercado_auth';
+      const szClass = sz > 50_000 ? 'large' : sz === 0 ? 'empty' : '';
+      const nmClass = isBack ? 'backup' : isAuth ? 'auth' : '';
+
+      return `
+        <div class="key-row">
+          <input type="checkbox" class="key-cb" data-key="${key}" ${isCheck ? 'checked' : ''}>
+          <span class="key-name ${nmClass}" title="${key}">${key}</span>
+          <span class="key-size ${szClass}">${formatBytes(sz)}</span>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="card">
+        <div class="group-header">
+          <div class="group-title">
+            <div class="group-icon" style="background:${group.color}22;">${group.icon}</div>
+            <div>
+              <div>${group.label}</div>
+              <div style="font-size:.68rem;font-weight:400;color:var(--text-muted);margin-top:1px;">${group.desc}</div>
+            </div>
+          </div>
+          <div class="group-meta">
+            <span class="badge badge-count">${group.present.length} chave${group.present.length > 1 ? 's' : ''}</span>
+            <span class="badge badge-size ${sizeLarge ? 'warn' : ''}">${sizeStr}</span>
+            <span class="chevron">▼</span>
+          </div>
+        </div>
+        <div class="key-list">${rows}</div>
+      </div>`;
+  },
+
+  /* ── Checkbox handler ── */
+  _onCheck(cb) {
+    const key = cb.dataset.key;
+    if (cb.checked) this.selected.add(key);
+    else            this.selected.delete(key);
+    this.updateStats();
+  },
+
+  /* ── Stats ── */
+  updateStats() {
+    const totalSize = this.allKeys.reduce((s, k) => s + getKeySize(k), 0);
+    const pct       = Math.min(100, (totalSize / (5 * 1024 * 1024)) * 100).toFixed(1);
+
+    document.getElementById('stat-count').textContent = this.allKeys.length;
+    document.getElementById('stat-sel').textContent   = this.selected.size;
+
+    const sizeEl = document.getElementById('stat-size');
+    sizeEl.textContent = `${formatBytes(totalSize)} / 5 MB (${pct}%)`;
+    sizeEl.className   = 'status-val' + (totalSize > 3_000_000 ? ' warn' : '');
+
+    document.getElementById('btn-delete-sel').disabled = this.selected.size === 0;
+  },
+
+  /* ── Selecionar / desmarcar tudo ── */
+  selectAll() {
+    this.allKeys.forEach(k => this.selected.add(k));
+    this.render();
+    this.updateStats();
+    Log.add(`${this.allKeys.length} chave(s) selecionada(s)`, 'info');
+  },
+  deselectAll() {
+    this.selected.clear();
+    this.render();
+    this.updateStats();
+    Log.add('Seleção removida', 'info');
+  },
+
+  /* ── Modal de confirmação ── */
+  confirmDelete(mode) {
+    let keys = [];
+    let title, desc;
+
+    if (mode === 'selected') {
+      keys  = [...this.selected];
+      title = `Excluir ${keys.length} chave${keys.length > 1 ? 's' : ''}?`;
+      desc  = 'Os dados a seguir serão permanentemente removidos do localStorage. Esta ação não pode ser desfeita.';
+    } else if (mode === 'backups') {
+      keys  = this.allKeys.filter(isBackupKey);
+      title = `Limpar ${keys.length} backup${keys.length > 1 ? 's' : ''}?`;
+      desc  = 'Os snapshots automáticos diários serão removidos. Os dados principais (supermarket-state) serão preservados.';
+    }
+
+    if (keys.length === 0) {
+      Toast.show('Nenhuma chave para excluir', 'warning', '⚠');
+      return;
+    }
+
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-desc').textContent  = desc;
+    document.getElementById('modal-list').innerHTML    =
+      keys.map(k => `<li>${k} <span style="color:var(--text-dim)">(${formatBytes(getKeySize(k))})</span></li>`).join('');
+
+    this.pendingAction = () => this._deleteKeys(keys);
+    document.getElementById('modal-confirm').onclick = () => {
+      this.closeModal();
+      this.pendingAction();
+    };
+
+    document.getElementById('modal-overlay').classList.add('show');
+  },
+
+  closeModal() {
+    document.getElementById('modal-overlay').classList.remove('show');
+    this.pendingAction = null;
+  },
+
+  /* ── Executar exclusão ── */
+  _deleteKeys(keys) {
+    let ok = 0, fail = 0;
+
+    keys.forEach(key => {
+      try {
+        localStorage.removeItem(key);
+        this.selected.delete(key);
+        Log.add(`Removida: ${key}`, 'ok');
+        ok++;
+      } catch (e) {
+        Log.add(`Falha ao remover ${key}: ${e.message}`, 'err');
+        fail++;
+      }
+    });
+
+    const msg = fail === 0
+      ? `${ok} chave${ok > 1 ? 's removidas' : ' removida'} com sucesso`
+      : `${ok} removidas, ${fail} com erro`;
+    const type = fail === 0 ? 'success' : 'danger';
+    const icon = fail === 0 ? '✓' : '⚠';
+
+    Toast.show(msg, type, icon);
+    Log.add(msg, fail === 0 ? 'ok' : 'warn');
+    this.scan();
+  },
+
+  /* ── Exportar snapshot ── */
+  exportSnapshot() {
+    try {
+      const snapshot = {};
+      this.allKeys.forEach(key => {
+        try { snapshot[key] = JSON.parse(localStorage.getItem(key)); }
+        catch { snapshot[key] = localStorage.getItem(key); }
+      });
+
+      const blob = new Blob(
+        [JSON.stringify(snapshot, null, 2)],
+        { type: 'application/json' }
+      );
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `storage-snapshot-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      const totalSize = this.allKeys.reduce((s, k) => s + getKeySize(k), 0);
+      Log.add(`Snapshot exportado — ${this.allKeys.length} chaves, ${formatBytes(totalSize)}`, 'ok');
+      Toast.show('Snapshot exportado com sucesso', 'success', '⬇');
+    } catch (e) {
+      Log.add('Erro ao exportar snapshot: ' + e.message, 'err');
+      Toast.show('Erro ao exportar snapshot', 'danger', '⚠');
+    }
+  }
+};
+
+/* ── Boot ── */
+document.addEventListener('DOMContentLoaded', () => App.init());
+</script>
+</body>
+</html>
