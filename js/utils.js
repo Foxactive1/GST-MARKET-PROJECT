@@ -1,44 +1,138 @@
 /**
- * Utilitários — VERSÃO CORRIGIDA
- * CORREÇÃO: showToast() agora verifica se Bootstrap está disponível
- * ADICIONADO: parseMonetaryValue() e maskCurrencyInput() para manipulação de valores monetários
- * ADICIONADO: máscaras para CPF, CNPJ e telefone
- * 
- * @author Dione Castro Alves - InNovaIdeia
- * @version 2.1.0 CORRIGIDA
- * @date 2026-03-06
+ * utils.js — v5.0.0
+ * Utilitário unificado — Supermercado Pro / GST Market
+ *
+ * Histórico de versões:
+ *   v2.0.0 — UI, toast, validação, backup, CSV, cálculos de vendas
+ *   v4.0.0 — Engine financeira: parser monetário, margem, markup, inteligência de preços
+ *   v5.0.0 — Merge completo. Toda função de v2 e v4 preservada.
+ *             ⚠️ BREAKING CHANGE: formatCurrency() agora retorna pt-BR ("1,99")
+ *             → Use formatCurrencyRaw() para obter o formato antigo ("1.99")
+ *
+ * @author Dione Castro Alves — InNovaIdeia
+ * @version 5.0.0
+ * @date 2026-03-15
  */
-window.utils = (function() {
+
+window.utils = (function () {
     'use strict';
 
-    // ----- Geração de IDs -----
-    function generateId() {
-        return 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    /* ==========================================================
+       SEÇÃO 1 — ID GENERATORS
+    ========================================================== */
+
+    /**
+     * Gera um ID único com prefixo opcional.
+     * @param {string} [prefix="id"] — prefixo do ID
+     * @returns {string} Ex: "id_1710000000000_4823"
+     */
+    function generateId(prefix) {
+        prefix = prefix || 'id';
+        return prefix + '_' + Date.now() + '_' + Math.floor(Math.random() * 9999);
     }
 
-    function generateFidelityCode() {
+    /**
+     * Gera um código alfanumérico aleatório de comprimento variável.
+     * @param {number} [length=8] — quantidade de caracteres
+     * @returns {string} Ex: "A3KZ91BT"
+     */
+    function generateCode(length) {
+        length = length || 8;
         var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        var code = 'FID-';
-        for (var i = 0; i < 6; i++) {
+        var code = '';
+        for (var i = 0; i < length; i++) {
             code += chars.charAt(Math.floor(Math.random() * chars.length));
         }
         return code;
     }
 
-    // ----- Formatação -----
+    /**
+     * Gera um código de fidelidade com prefixo fixo "FID-".
+     * @returns {string} Ex: "FID-3HK72A"
+     */
+    function generateFidelityCode() {
+        return 'FID-' + generateCode(6);
+    }
+
+    /* ==========================================================
+       SEÇÃO 2 — PARSER MONETÁRIO (BLINDADO)
+    ========================================================== */
+
+    /**
+     * Converte string monetária brasileira em número float.
+     * Suporta: "R$ 1.234,56" → 1234.56 | null/undefined → 0 | number → passthrough
+     * @param {*} value
+     * @returns {number}
+     */
+    function parseCurrencyBR(value) {
+        if (value === null || value === undefined) return 0;
+        if (typeof value === 'number') return value;
+        return Number(
+            value
+                .toString()
+                .replace(/[^\d,.-]/g, '')  // remove R$, espaços, etc.
+                .replace(/\./g, '')         // remove separador de milhar
+                .replace(',', '.')          // troca vírgula decimal por ponto
+        ) || 0;
+    }
+
+    /* ==========================================================
+       SEÇÃO 3 — FORMATADORES
+    ========================================================== */
+
+    /**
+     * Formata número no padrão pt-BR sem símbolo ("1.234,56").
+     * ⚠️ v5.0: comportamento alterado de toFixed(2) para toLocaleString pt-BR.
+     *    Use formatCurrencyRaw() para obter o formato antigo.
+     * @param {number} value
+     * @returns {string} Ex: "1.234,56"
+     */
     function formatCurrency(value) {
+        var number = Number(value) || 0;
+        return number.toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    /**
+     * Formato legado de formatCurrency (v2.0.0).
+     * Retorna string no padrão US com ponto decimal ("1234.56").
+     * Útil para campos numéricos de input e cálculos internos.
+     * @param {number} value
+     * @returns {string} Ex: "1234.56"
+     */
+    function formatCurrencyRaw(value) {
         return parseFloat(value || 0).toFixed(2);
     }
 
-    function formatDate(date, format) {
-        if (!format) format = 'short';
-        var d = new Date(date);
-        if (format === 'short') {
-            return d.toLocaleDateString('pt-BR');
-        }
-        return d.toLocaleString('pt-BR');
+    /**
+     * Formata número com prefixo "R$ " no padrão pt-BR.
+     * @param {number} value
+     * @returns {string} Ex: "R$ 1.234,56"
+     */
+    function formatCurrencyBR(value) {
+        var number = Number(value) || 0;
+        return 'R$ ' + number.toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
     }
 
+    /**
+     * Formata percentual com 2 casas decimais.
+     * @param {number} value
+     * @returns {string} Ex: "12.50%"
+     */
+    function formatPercent(value) {
+        return Number(value || 0).toFixed(2) + '%';
+    }
+
+    /**
+     * Formata número de telefone brasileiro (10 ou 11 dígitos).
+     * @param {string} phone
+     * @returns {string} Ex: "(16) 99999-9999"
+     */
     function formatPhone(phone) {
         if (!phone) return '';
         var cleaned = phone.replace(/\D/g, '');
@@ -49,70 +143,57 @@ window.utils = (function() {
     }
 
     /**
-     * Converte string no formato brasileiro (1.234,56) para número float
+     * Formata data em pt-BR. Aceita formato 'short' (data) ou 'long' (data+hora).
+     * @param {Date|string|number} date
+     * @param {string} [format='short'] — 'short' | 'long'
+     * @returns {string} Ex: "15/03/2026" ou "15/03/2026 14:30:00"
      */
-    function parseMonetaryValue(str) {
-        if (!str) return 0;
-        // Remove pontos de milhar e substitui vírgula decimal por ponto
-        var cleaned = str.replace(/\./g, '').replace(',', '.');
-        var num = parseFloat(cleaned);
-        return isNaN(num) ? 0 : num;
+    function formatDate(date, format) {
+        var d = new Date(date);
+        if (format === 'long') {
+            return d.toLocaleString('pt-BR');
+        }
+        return d.toLocaleDateString('pt-BR');
     }
 
     /**
-     * Aplica máscara de moeda enquanto o usuário digita
-     * Ex: 1234,56 -> 1.234,56
+     * Formata data e hora completa em pt-BR.
+     * Alias explícito de formatDate(date, 'long') para uso programático.
+     * @param {Date|string|number} date
+     * @returns {string} Ex: "15/03/2026 14:30:00"
      */
-    function maskCurrencyInput(value) {
-        // Remove tudo que não for dígito
-        var digits = value.replace(/\D/g, '');
-        if (!digits) return '';
-        
-        // Converte para centavos (número inteiro)
-        var number = parseInt(digits) / 100;
-        
-        // Formata como moeda brasileira
-        return number.toLocaleString('pt-BR', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
+    function formatDateTime(date) {
+        return new Date(date).toLocaleString('pt-BR');
+    }
+
+    /* ==========================================================
+       SEÇÃO 4 — MÁSCARA MONETÁRIA
+    ========================================================== */
+
+    /**
+     * Aplica máscara monetária pt-BR em tempo real a um elemento <input>.
+     * Converte dígitos digitados para formato "1.234,56" automaticamente.
+     * @param {HTMLInputElement} input — elemento de input DOM
+     */
+    function maskCurrencyInput(input) {
+        input.addEventListener('input', function () {
+            var value = input.value.replace(/\D/g, '');
+            value = (Number(value) / 100).toFixed(2);
+            value = value.replace('.', ',');
+            value = value.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
+            input.value = value;
         });
     }
 
-    /**
-     * Máscara para CPF (000.000.000-00)
-     */
-    function maskCPFInput(value) {
-        var digits = value.replace(/\D/g, '');
-        if (digits.length <= 3) return digits;
-        if (digits.length <= 6) return digits.replace(/(\d{3})(\d+)/, '$1.$2');
-        if (digits.length <= 9) return digits.replace(/(\d{3})(\d{3})(\d+)/, '$1.$2.$3');
-        return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-    }
+    /* ==========================================================
+       SEÇÃO 5 — VALIDAÇÕES
+    ========================================================== */
 
     /**
-     * Máscara para CNPJ (00.000.000/0000-00)
+     * Valida objeto de produto antes de salvar.
+     * @param {object} product — { nome, qtd, preco }
+     * @returns {boolean}
      */
-    function maskCNPJInput(value) {
-        var digits = value.replace(/\D/g, '');
-        if (digits.length <= 2) return digits;
-        if (digits.length <= 5) return digits.replace(/(\d{2})(\d+)/, '$1.$2');
-        if (digits.length <= 8) return digits.replace(/(\d{2})(\d{3})(\d+)/, '$1.$2.$3');
-        if (digits.length <= 12) return digits.replace(/(\d{2})(\d{3})(\d{3})(\d+)/, '$1.$2.$3/$4');
-        return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
-    }
-
-    /**
-     * Máscara para telefone (aplica formatação enquanto digita)
-     */
-    function maskPhoneInput(value) {
-        var digits = value.replace(/\D/g, '');
-        if (digits.length <= 2) return '(' + digits;
-        if (digits.length <= 6) return '(' + digits.substr(0,2) + ') ' + digits.substr(2);
-        if (digits.length <= 10) return '(' + digits.substr(0,2) + ') ' + digits.substr(2,4) + '-' + digits.substr(6);
-        return '(' + digits.substr(0,2) + ') ' + digits.substr(2,5) + '-' + digits.substr(7);
-    }
-
-    // ----- Validações -----
     function validateProduct(product) {
         if (!product || !product.nome || product.nome.trim() === '') {
             alert('Nome do produto é obrigatório');
@@ -129,97 +210,251 @@ window.utils = (function() {
         return true;
     }
 
+    /**
+     * Valida objeto de cliente antes de salvar.
+     * @param {object} client — { nome, fone }
+     * @returns {boolean}
+     */
     function validateClient(client) {
         if (!client || !client.nome || client.nome.trim() === '') {
             alert('Nome do cliente é obrigatório');
             return false;
         }
-        if (!client || !client.fone || client.fone.trim() === '') {
+        if (!client.fone || client.fone.trim() === '') {
             alert('Telefone é obrigatório');
             return false;
         }
         return true;
     }
 
-    // ----- Toast (VERSÃO CORRIGIDA) -----
     /**
-     * Exibe uma notificação toast
-     * CORREÇÃO: Agora verifica se Bootstrap está disponível antes de usar
-     * @param {string} message - Mensagem a exibir
-     * @param {string} type - Tipo: success, danger, warning, info
+     * Verifica se um preço é válido (> 0 e < 1.000.000).
+     * @param {number|string} value
+     * @returns {boolean}
+     */
+    function isValidPrice(value) {
+        var price = Number(value);
+        return price > 0 && price < 1000000;
+    }
+
+    /* ==========================================================
+       SEÇÃO 6 — CÁLCULOS DE PREÇO / MARGEM / MARKUP
+    ========================================================== */
+
+    /**
+     * Calcula margem percentual sobre o preço de venda.
+     * Fórmula: ((venda - custo) / venda) * 100
+     * @param {number} cost — custo do produto
+     * @param {number} sale — preço de venda
+     * @returns {number} margem em %
+     */
+    function calculateMargin(cost, sale) {
+        cost = Number(cost) || 0;
+        sale = Number(sale) || 0;
+        if (sale === 0) return 0;
+        return ((sale - cost) / sale) * 100;
+    }
+
+    /**
+     * Calcula markup percentual sobre o custo.
+     * Fórmula: ((venda - custo) / custo) * 100
+     * @param {number} cost — custo do produto
+     * @param {number} sale — preço de venda
+     * @returns {number} markup em %
+     */
+    function calculateMarkup(cost, sale) {
+        cost = Number(cost) || 0;
+        sale = Number(sale) || 0;
+        if (cost === 0) return 0;
+        return ((sale - cost) / cost) * 100;
+    }
+
+    /**
+     * Calcula lucro bruto absoluto.
+     * @param {number} cost
+     * @param {number} sale
+     * @returns {number} lucro em R$
+     */
+    function calculateProfit(cost, sale) {
+        cost = Number(cost) || 0;
+        sale = Number(sale) || 0;
+        return sale - cost;
+    }
+
+    /**
+     * Aplica markup percentual sobre o custo para obter preço de venda.
+     * @param {number} cost
+     * @param {number} markup — percentual ex: 30 = 30%
+     * @returns {number} preço sugerido
+     */
+    function applyMarkup(cost, markup) {
+        cost = Number(cost) || 0;
+        markup = Number(markup) || 0;
+        return cost + (cost * markup / 100);
+    }
+
+    /**
+     * Calcula preço de venda a partir de custo e margem desejada.
+     * Fórmula: custo / (1 - margem/100)
+     * @param {number} cost
+     * @param {number} margin — percentual ex: 40 = 40%
+     * @returns {number} preço sugerido
+     */
+    function applyMargin(cost, margin) {
+        cost = Number(cost) || 0;
+        margin = Number(margin) || 0;
+        if (margin >= 100) return 0; // margem inválida
+        return cost / (1 - margin / 100);
+    }
+
+    /* ==========================================================
+       SEÇÃO 7 — ENGINE DE COMPARAÇÃO DE PREÇOS
+    ========================================================== */
+
+    /**
+     * Calcula diferença absoluta e percentual entre dois preços.
+     * @param {number} priceA — preço de referência
+     * @param {number} priceB — preço base de comparação
+     * @returns {{ difference: number, percent: number }}
+     */
+    function priceDifference(priceA, priceB) {
+        priceA = Number(priceA) || 0;
+        priceB = Number(priceB) || 0;
+        var diff = priceA - priceB;
+        var percent = priceB === 0 ? 0 : (diff / priceB) * 100;
+        return { difference: diff, percent: percent };
+    }
+
+    /**
+     * Sugere preço competitivo baseado na média dos concorrentes (2% abaixo).
+     * @param {number} myPrice — preço atual do produto
+     * @param {number[]} [competitorPrices=[]] — array de preços dos concorrentes
+     * @returns {{ suggestion: number, avg: number, min: number, max: number }}
+     */
+    function competitivePriceSuggestion(myPrice, competitorPrices) {
+        competitorPrices = competitorPrices || [];
+        var valid = competitorPrices.map(Number).filter(function (v) { return v > 0; });
+
+        if (valid.length === 0) {
+            return { suggestion: myPrice, avg: myPrice, min: myPrice, max: myPrice };
+        }
+
+        var avg = valid.reduce(function (a, b) { return a + b; }, 0) / valid.length;
+        var min = Math.min.apply(null, valid);
+        var max = Math.max.apply(null, valid);
+        var suggestion = avg * 0.98; // 2% abaixo da média de mercado
+
+        return { suggestion: suggestion, avg: avg, min: min, max: max };
+    }
+
+    /**
+     * Verifica se o preço está competitivo (até 5% acima da média de mercado).
+     * @param {number} myPrice
+     * @param {number} marketAvg — média de mercado
+     * @returns {boolean}
+     */
+    function isPriceCompetitive(myPrice, marketAvg) {
+        if (!marketAvg) return false;
+        var diff = ((myPrice - marketAvg) / marketAvg) * 100;
+        return diff <= 5;
+    }
+
+    /* ==========================================================
+       SEÇÃO 8 — CÁLCULOS DE VENDAS
+    ========================================================== */
+
+    /**
+     * Soma o total de um array de vendas.
+     * @param {Array<{total: number}>} sales
+     * @returns {number}
+     */
+    function calculateTotalSales(sales) {
+        var total = 0;
+        for (var i = 0; i < sales.length; i++) {
+            total += sales[i].total || 0;
+        }
+        return total;
+    }
+
+    /**
+     * Soma apenas as vendas realizadas no dia atual.
+     * @param {Array<{total: number, date: string|Date}>} sales
+     * @returns {number}
+     */
+    function calculateTodaySales(sales) {
+        var today = new Date().toDateString();
+        var total = 0;
+        for (var i = 0; i < sales.length; i++) {
+            if (new Date(sales[i].date).toDateString() === today) {
+                total += sales[i].total || 0;
+            }
+        }
+        return total;
+    }
+
+    /* ==========================================================
+       SEÇÃO 9 — UI: TOAST / ALERT / CONFIRM
+    ========================================================== */
+
+    /**
+     * Exibe notificação toast (Bootstrap 5).
+     * Fallback para alert() se Bootstrap ou container não estiver disponível.
+     * @param {string} message — texto da notificação
+     * @param {string} [type='success'] — 'success' | 'danger' | 'warning' | 'info'
      */
     function showToast(message, type) {
-        // Log para debug
         console.log('[Toast]', type || 'info', ':', message);
-        
-        // VALIDAÇÃO 1: Container existe?
+
         var container = document.getElementById('toastContainer');
         if (!container) {
-            console.warn('⚠️ toastContainer não encontrado no DOM. Usando alert como fallback.');
+            console.warn('⚠️ toastContainer não encontrado. Usando alert.');
             alert(message);
             return;
         }
-        
-        // VALIDAÇÃO 2: Bootstrap está disponível?
-        if (typeof bootstrap === 'undefined') {
-            console.warn('⚠️ Bootstrap não está carregado. Usando alert como fallback.');
+
+        if (typeof bootstrap === 'undefined' || !bootstrap.Toast) {
+            console.warn('⚠️ Bootstrap.Toast não disponível. Usando alert.');
             alert(message);
             return;
         }
-        
-        // VALIDAÇÃO 3: Bootstrap.Toast existe?
-        if (!bootstrap.Toast) {
-            console.warn('⚠️ Bootstrap.Toast não está disponível. Usando alert como fallback.');
-            alert(message);
-            return;
-        }
-        
-        // Tudo OK, cria o toast
+
         try {
-            var toastId = 'toast-' + Date.now();
-            var toast = document.createElement('div');
-            toast.id = toastId;
-            
-            // Determina cor do toast
             var bgClass = 'bg-success';
-            if (type === 'danger') bgClass = 'bg-danger';
-            else if (type === 'warning') bgClass = 'bg-warning';
-            else if (type === 'info') bgClass = 'bg-info';
-            
-            toast.className = 'toast align-items-center text-white ' + bgClass + ' border-0 fade-in';
+            if (type === 'danger')  bgClass = 'bg-danger';
+            if (type === 'warning') bgClass = 'bg-warning';
+            if (type === 'info')    bgClass = 'bg-info';
+
+            var toast = document.createElement('div');
+            toast.className = 'toast align-items-center text-white ' + bgClass + ' border-0';
             toast.setAttribute('role', 'alert');
             toast.setAttribute('aria-live', 'assertive');
             toast.setAttribute('aria-atomic', 'true');
-            
-            toast.innerHTML = 
+            toast.innerHTML =
                 '<div class="d-flex">' +
                 '<div class="toast-body">' + message + '</div>' +
-                '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>' +
+                '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Fechar"></button>' +
                 '</div>';
-            
+
             container.appendChild(toast);
-            
-            // Cria e exibe o toast
-            var bsToast = new bootstrap.Toast(toast, { 
-                autohide: true, 
-                delay: 3000 
-            });
+
+            var bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 3000 });
             bsToast.show();
-            
-            // Remove o toast após o tempo
-            setTimeout(function() { 
-                toast.remove(); 
-            }, 3500);
-            
-        } catch (error) {
-            console.error('❌ Erro ao criar toast:', error);
-            console.error('Detalhes:', error.message);
-            // Fallback em caso de erro
+
+            setTimeout(function () { toast.remove(); }, 3500);
+
+        } catch (err) {
+            console.error('❌ Erro ao criar toast:', err.message);
             alert(message);
         }
     }
 
-    // ----- Alertas (Swal ou fallback) -----
+    /**
+     * Exibe alerta modal (SweetAlert2 se disponível, alert() como fallback).
+     * @param {string} title
+     * @param {string} [icon='info'] — 'success' | 'error' | 'warning' | 'info' | 'question'
+     * @param {string} [text]
+     * @returns {Promise}
+     */
     function showAlert(title, icon, text) {
         if (typeof Swal !== 'undefined') {
             return Swal.fire({
@@ -229,13 +464,19 @@ window.utils = (function() {
                 confirmButtonColor: '#10b981',
                 confirmButtonText: 'OK'
             });
-        } else {
-            console.warn('⚠️ SweetAlert2 não disponível, usando alert nativo');
-            alert(title + (text ? ': ' + text : ''));
-            return Promise.resolve({ isConfirmed: true });
         }
+        console.warn('⚠️ SweetAlert2 não disponível. Usando alert nativo.');
+        alert(title + (text ? ': ' + text : ''));
+        return Promise.resolve({ isConfirmed: true });
     }
 
+    /**
+     * Exibe diálogo de confirmação (SweetAlert2 se disponível, confirm() como fallback).
+     * @param {string} title
+     * @param {string} [text]
+     * @param {string} [confirmText='Confirmar']
+     * @returns {Promise<{isConfirmed: boolean}>}
+     */
     function showConfirm(title, text, confirmText) {
         if (typeof Swal !== 'undefined') {
             return Swal.fire({
@@ -248,14 +489,39 @@ window.utils = (function() {
                 confirmButtonText: confirmText || 'Confirmar',
                 cancelButtonText: 'Cancelar'
             });
-        } else {
-            console.warn('⚠️ SweetAlert2 não disponível, usando confirm nativo');
-            var result = confirm(title + (text ? '\n' + text : ''));
-            return Promise.resolve({ isConfirmed: result });
         }
+        console.warn('⚠️ SweetAlert2 não disponível. Usando confirm nativo.');
+        var result = confirm(title + (text ? '\n' + text : ''));
+        return Promise.resolve({ isConfirmed: result });
     }
 
-    // ----- Backup -----
+    /* ==========================================================
+       SEÇÃO 10 — UTILIDADES GERAIS
+    ========================================================== */
+
+    /**
+     * Retorna uma versão com debounce de uma função.
+     * Útil para eventos de input que disparam pesquisas ou filtros.
+     * @param {Function} func — função a limitar
+     * @param {number} wait — delay em ms
+     * @returns {Function}
+     */
+    function debounce(func, wait) {
+        var timeout;
+        return function () {
+            var args = arguments;
+            clearTimeout(timeout);
+            timeout = setTimeout(function () {
+                timeout = null;
+                func.apply(null, args);
+            }, wait);
+        };
+    }
+
+    /**
+     * Gera backup completo do state do sistema e inicia download em .json.
+     * Depende de window.state.get() estar disponível.
+     */
     function createBackup() {
         try {
             var state = window.state.get();
@@ -268,138 +534,147 @@ window.utils = (function() {
             a.click();
             URL.revokeObjectURL(url);
             showToast('Backup criado com sucesso!', 'success');
-        } catch (e) {
-            console.error('Erro ao criar backup:', e);
+        } catch (err) {
+            console.error('❌ Erro ao criar backup:', err);
             alert('Erro ao criar backup.');
         }
     }
 
-    // ----- Debounce -----
-    function debounce(func, wait) {
-        var timeout;
-        return function() {
-            var args = arguments;
-            var later = function() {
-                timeout = null;
-                func.apply(null, args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-
-    // ----- Cálculos -----
-    function calculateTotalSales(sales) {
-        var total = 0;
-        for (var i = 0; i < sales.length; i++) {
-            total += sales[i].total || 0;
-        }
-        return total;
-    }
-
-    function calculateTodaySales(sales) {
-        var today = new Date().toDateString();
-        var total = 0;
-        for (var i = 0; i < sales.length; i++) {
-            var saleDate = new Date(sales[i].date).toDateString();
-            if (saleDate === today) {
-                total += sales[i].total || 0;
-            }
-        }
-        return total;
-    }
-
-    // ----- Exportação CSV -----
+    /**
+     * Exporta array de objetos para arquivo CSV e inicia download.
+     * @param {object[]} data — array de objetos com as mesmas chaves
+     * @param {string} filename — nome do arquivo com extensão .csv
+     */
     function exportToCSV(data, filename) {
         if (!data || data.length === 0) {
-            showToast('Nenhum dado para exportar', 'warning');
+            console.warn('⚠️ exportToCSV: nenhum dado para exportar.');
             return;
         }
+
         var csvRows = [];
-        // Extrai cabeçalhos
+
+        // Header
         var headers = Object.keys(data[0]);
         csvRows.push(headers.join(','));
-        
-        // Linhas
+
+        // Rows
         for (var i = 0; i < data.length; i++) {
-            var row = data[i];
-            var values = [];
-            for (var key in row) {
-                if (row.hasOwnProperty(key)) {
-                    var value = row[key];
-                    if (typeof value === 'string' && value.includes(',')) {
-                        value = '"' + value.replace(/"/g, '""') + '"';
-                    }
-                    values.push(value);
+            var values = headers.map(function (key) {
+                var value = data[i][key];
+                if (typeof value === 'string') {
+                    return '"' + value.replace(/"/g, '""') + '"';
                 }
-            }
+                return value !== undefined && value !== null ? value : '';
+            });
             csvRows.push(values.join(','));
         }
-        
-        var csv = csvRows.join('\n');
+
+        var csv = '\uFEFF' + csvRows.join('\n'); // BOM para Excel reconhecer UTF-8
         var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');
         a.href = url;
-        a.download = filename.endsWith('.csv') ? filename : filename + '.csv';
+        a.download = filename;
         a.click();
         URL.revokeObjectURL(url);
     }
 
-    // ----- Verificação de Dependências -----
+    /* ==========================================================
+       SEÇÃO 11 — DIAGNÓSTICO DE DEPENDÊNCIAS
+    ========================================================== */
+
     /**
-     * NOVA FUNÇÃO: Verifica se todas as dependências estão carregadas
-     * @returns {object} Status das dependências
+     * Verifica e loga o status das dependências externas do sistema.
+     * @returns {{ bootstrap: boolean, bootstrapToast: boolean, swal: boolean, toastContainer: boolean }}
      */
     function checkDependencies() {
         var deps = {
-            bootstrap: typeof bootstrap !== 'undefined',
+            bootstrap:      typeof bootstrap !== 'undefined',
             bootstrapToast: typeof bootstrap !== 'undefined' && !!bootstrap.Toast,
-            swal: typeof Swal !== 'undefined',
+            swal:           typeof Swal !== 'undefined',
             toastContainer: !!document.getElementById('toastContainer')
         };
-        
-        console.log('=== Verificação de Dependências ===');
-        console.log('Bootstrap:', deps.bootstrap ? '✅' : '❌');
-        console.log('Bootstrap.Toast:', deps.bootstrapToast ? '✅' : '❌');
-        console.log('SweetAlert2:', deps.swal ? '✅' : '❌');
-        console.log('Toast Container:', deps.toastContainer ? '✅' : '❌');
-        
+
+        console.log('%c=== utils.js v5.0 — Dependências ===', 'color: #6366f1; font-weight: bold');
+        console.log('Bootstrap:       ', deps.bootstrap      ? '✅' : '❌');
+        console.log('Bootstrap.Toast: ', deps.bootstrapToast ? '✅' : '❌');
+        console.log('SweetAlert2:     ', deps.swal           ? '✅' : '❌');
+        console.log('Toast Container: ', deps.toastContainer ? '✅' : '❌');
+
         return deps;
     }
 
-    // API pública
+    /* ==========================================================
+       API PÚBLICA
+    ========================================================== */
+
     return {
-        generateId: generateId,
-        generateFidelityCode: generateFidelityCode,
-        formatCurrency: formatCurrency,
-        formatDate: formatDate,
-        formatPhone: formatPhone,
-        parseMonetaryValue: parseMonetaryValue,
-        maskCurrencyInput: maskCurrencyInput,
-        maskCPFInput: maskCPFInput,
-        maskCNPJInput: maskCNPJInput,
-        maskPhoneInput: maskPhoneInput,
-        validateProduct: validateProduct,
-        validateClient: validateClient,
-        showToast: showToast,
-        showAlert: showAlert,
-        showConfirm: showConfirm,
-        createBackup: createBackup,
-        debounce: debounce,
-        calculateTotalSales: calculateTotalSales,
-        calculateTodaySales: calculateTodaySales,
-        exportToCSV: exportToCSV,
-        checkDependencies: checkDependencies
+        // ID Generators
+        generateId,
+        generateCode,
+        generateFidelityCode,
+
+        // Parser
+        parseCurrencyBR,
+
+        // Formatadores
+        formatCurrency,       // ⚠️ v5.0: agora retorna pt-BR "1.234,56"
+        formatCurrencyRaw,    // legado v2: retorna "1234.56" (toFixed)
+        formatCurrencyBR,     // retorna "R$ 1.234,56"
+        formatPercent,
+        formatPhone,
+        formatDate,
+        formatDateTime,
+
+        // Máscara
+        maskCurrencyInput,
+
+        // Validações
+        validateProduct,
+        validateClient,
+        isValidPrice,
+
+        // Cálculos de preço
+        calculateMargin,
+        calculateMarkup,
+        calculateProfit,
+        applyMarkup,
+        applyMargin,
+
+        // Inteligência de preços
+        priceDifference,
+        competitivePriceSuggestion,
+        isPriceCompetitive,
+
+        // Cálculos de vendas
+        calculateTotalSales,
+        calculateTodaySales,
+
+        // UI
+        showToast,
+        showAlert,
+        showConfirm,
+
+        // Utilitários
+        debounce,
+        createBackup,
+        exportToCSV,
+
+        // Diagnóstico
+        checkDependencies
     };
+
 })();
 
-// Verificação automática ao carregar
-console.log('%c✅ utils.js v2.1.0 (CORRIGIDO) carregado com sucesso!', 'color: #10b981; font-weight: bold');
+// ── Boot log ──────────────────────────────────────────────────────────────────
+console.log(
+    '%c✅ utils.js v5.0.0 — InNovaIdeia carregado',
+    'color: #10b981; font-weight: bold; font-size: 12px'
+);
 
-// Verifica dependências após um delay para dar tempo das bibliotecas carregarem
-setTimeout(function() {
+// Diagnóstico automático após carregamento das dependências
+setTimeout(function () {
     if (window.utils && typeof window.utils.checkDependencies === 'function') {
         window.utils.checkDependencies();
     }
-}, 100);
+}, 150);
