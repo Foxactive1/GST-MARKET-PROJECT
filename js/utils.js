@@ -1,5 +1,5 @@
 /**
- * utils.fixed.js — v5.0.0 (patched, protected)
+ * utils.js — v5.0.0 (patched, protected)
  * Correções: proteção contra re-load, try/catch global, validação de exports,
  * hardening de funções que acessam dependências externas e stubs seguros.
  *
