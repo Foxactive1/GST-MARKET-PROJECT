@@ -401,6 +401,88 @@ window.state = (function() {
         persist();
     }
 
+
+    // =========================================================================
+    // MÉTODOS DE MODIFICAÇÃO — PEDIDOS DE COMPRA
+    // =========================================================================
+
+    function getPedidos() {
+        return (getReadOnlyState().pedidos || []).slice();
+    }
+
+    function savePedido(pedido) {
+        if (!Array.isArray(state.pedidos)) state.pedidos = [];
+        state.pedidos.push({ ...pedido });
+        invalidateCache();
+        persist();
+        return true;
+    }
+
+    function updatePedido(id, changes) {
+        if (!Array.isArray(state.pedidos)) return false;
+        var index = state.pedidos.findIndex(function(p) { return p.id === id; });
+        if (index !== -1) {
+            state.pedidos[index] = { ...state.pedidos[index], ...changes };
+            invalidateCache();
+            persist();
+            return true;
+        }
+        return false;
+    }
+
+    function deletePedido(id) {
+        if (!Array.isArray(state.pedidos)) return;
+        state.pedidos = state.pedidos.filter(function(p) { return p.id !== id; });
+        invalidateCache();
+        persist();
+    }
+
+    function getNextPedidoNumero() {
+        var year = new Date().getFullYear();
+        var pedidos = state.pedidos || [];
+        var seq = pedidos.filter(function(p) {
+            return p.numero && p.numero.startsWith('PC-' + year + '-');
+        }).length + 1;
+        return 'PC-' + year + '-' + String(seq).padStart(4, '0');
+    }
+
+    function receberPedidoItens(pedidoId, itensRecebidos) {
+        if (!Array.isArray(state.pedidos)) return false;
+        var pedidoIdx = state.pedidos.findIndex(function(p) { return p.id === pedidoId; });
+        if (pedidoIdx === -1) return false;
+        var pedido = state.pedidos[pedidoIdx];
+        var itensAtualizados = (pedido.itens || []).map(function(item) {
+            var recv = itensRecebidos.find(function(r) { return r.produtoId === item.produtoId; });
+            return recv ? { ...item, qtdRecebida: recv.qtdRecebida, precoUnitario: recv.precoUnitario } : item;
+        });
+        var parcial = itensAtualizados.some(function(i) {
+            return (i.qtdRecebida || 0) < (i.qtdSolicitada || 0);
+        });
+        itensRecebidos.forEach(function(recv) {
+            if (!recv.qtdRecebida) return;
+            var prodIdx = state.products.findIndex(function(p) { return p.id === recv.produtoId; });
+            if (prodIdx !== -1) {
+                state.products[prodIdx] = {
+                    ...state.products[prodIdx],
+                    qtd:  (state.products[prodIdx].qtd || 0) + recv.qtdRecebida,
+                    cost: recv.precoUnitario || state.products[prodIdx].cost
+                };
+            }
+        });
+        state.pedidos[pedidoIdx] = {
+            ...pedido,
+            itens:           itensAtualizados,
+            status:          parcial ? 'recebido_parcial' : 'recebido',
+            dataRecebimento: new Date().toISOString()
+        };
+        invalidateCache();
+        persist();
+        return true;
+    }
+
+    // Alias: pedidos.js usa getFornecedores, state tem getSuppliers
+    function getFornecedores() { return getSuppliers(); }
+
     // =========================================================================
     // RESET E SEED
     // =========================================================================
@@ -470,6 +552,15 @@ window.state = (function() {
 
         // Preços
         setPriceHistory: setPriceHistory,
+
+        // Pedidos de compra
+        getPedidos:           getPedidos,
+        savePedido:           savePedido,
+        updatePedido:         updatePedido,
+        deletePedido:         deletePedido,
+        getNextPedidoNumero:  getNextPedidoNumero,
+        receberPedidoItens:   receberPedidoItens,
+        getFornecedores:      getFornecedores,
 
         // Utilitários
         resetToInitial: resetToInitial,

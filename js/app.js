@@ -22,6 +22,8 @@ fornecedores: ['admin'],
 
 fidelidade: ['admin'],
 
+pedidos: ['admin'],
+
 relatorios: ['admin'],
 
 'price-monitor': ['admin']
@@ -48,6 +50,8 @@ fornecedores: () => window.fornecedores,
 relatorios: () => window.relatorios,
 
 fidelidade: () => window.fidelidade,
+
+pedidos: () => window.pedidos,
 
 'price-monitor': () => window.priceIntelligence,
 
@@ -300,6 +304,8 @@ relatorios:'Relatórios',
 
 fidelidade:'Programa de Fidelidade',
 
+pedidos:'Pedidos de Compra',
+
 'price-monitor':'Inteligência de Preços',
 
 login:'Login'
@@ -427,6 +433,8 @@ fornecedores:'Fornecedores',
 relatorios:'Relatórios',
 
 fidelidade:'Fidelidade',
+
+pedidos:'Pedidos de Compra',
 
 'price-monitor':'Inteligência de Preços'
 

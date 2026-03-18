@@ -71,7 +71,7 @@ id:"nav-pdv",
 label:"Ir para PDV",
 icon:"bi-cash-register",
 category:"Navegação",
-shortcut:"Ctrl+P", // BUG 03 CORRIGIDO: era "Ctrl+Shift+P" que era interceptado pelo browser como Imprimir
+shortcut:"Ctrl+Shift+P",
 action:()=>window.app?.switchView("pdv")
 },
 
@@ -132,7 +132,7 @@ id:"action-print",
 label:"Imprimir Página",
 icon:"bi-printer",
 category:"Ações",
-// Sem shortcut — Ctrl+P é reservado para PDV; imprimir está disponível apenas via Command Palette
+shortcut:"Ctrl+P",
 action:()=>window.print()
 },
 
@@ -460,12 +460,9 @@ window.utils?.showAlert(
 
 <li>Ctrl + K → Command Palette</li>
 <li>Ctrl + D → Dashboard</li>
-<li>Ctrl + P → PDV</li>
+<li>Ctrl + Shift + P → PDV</li>
 <li>Ctrl + E → Estoque</li>
-<li>Ctrl + C → Clientes</li>
 <li>Ctrl + R → Relatórios</li>
-<li>Ctrl + F → Fidelidade</li>
-<li>Ctrl + G → Fornecedores</li>
 
 </ul>
 `
