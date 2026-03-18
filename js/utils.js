@@ -608,7 +608,7 @@ window.utils = (function () {
        API PÚBLICA
     ========================================================== */
 
-    return {
+     return {
         // ID Generators
         generateId,
         generateCode,
@@ -626,13 +626,27 @@ window.utils = (function () {
         formatDate,
         formatDateTime,
 
-        // Máscara
+        // Máscaras de input
         maskCurrencyInput,
+        maskPhoneInput,
+        maskCNPJInput,
+        maskCPFInput,
+
+        // Formatadores extras
+        formatCNPJ,
+        formatCPF,
+        formatDateISO,
 
         // Validações
         validateProduct,
         validateClient,
+        validateSupplier,
+        validateCNPJ,
+        validateCPF,
         isValidPrice,
+
+        // Parser monetário (alias)
+        parseMonetaryValue: parseCurrencyBR,
 
         // Cálculos de preço
         calculateMargin,
