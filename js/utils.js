@@ -689,7 +689,7 @@
 
     } catch (err) {
         // Se algo falhar durante a inicialização, evita deixar window.utils undefined
-        console.error('Falha ao inicializar utils.fixed.js:', err);
+        console.error('Falha ao inicializar utils.js:', err);
         window.utils = window.utils || { __initError: true };
     }
 })();
