@@ -1,39 +1,17 @@
 /**
- * relatorios.js — v2.1.0
- * Módulo de Relatórios e Análises — Supermercado Pro / GST Market
- *
- * Correções v2.1.0:
- * - [FIX] Substituído R$+formatCurrency() por formatCurrencyBR() em todo o módulo (v5.0 compat)
- * - [FIX] esc() aplicado em renderTopProducts, renderTopClients e viewSaleDetails (anti-XSS)
- * - [FIX] currentPeriod sincronizado com o <select> ('week' por padrão)
- * - [FIX] renderSalesTable agora lê clients do cache em vez de re-chamar state.get()
- * - [FIX] aggregateSalesByDate usa chave ISO (yyyy-mm-dd); formatação só na exibição
- * - [FIX] Guards contra sale.items undefined em aggregateProductSales/ClientPurchases
- * - [FIX] Guard contra sale.payment null em initPaymentChart labels
- * - [FIX] CSV exportSales exporta Total como número raw (sem formatação)
- * - [FIX] viewSaleDetails usa window.utils.showAlert() com fallback ao invés de Swal direto
- * - [FIX] Indentação corrigida em exportFullReport
- * - [FIX] Campo "Comparar com" marcado como not-implemented com tooltip explicativo
- * - [ADD] clients adicionado ao cachedData para consistência
- *
- * @author Dione Castro Alves — InNovaIdeia
- * @version 2.1.0
- * @date 2026-03-15
+ * Módulo de Relatórios
+ * Versão revisada com melhorias:
+ * - Verificação de dependências (state, utils, Chart)
+ * - Inicialização segura de gráficos
+ * - Feedback visual (loading) durante atualizações
+ * - Exportação PDF real com window.print()
+ * - Cache simples para agregações de dados
+ * - Paginação e limite na tabela de vendas
+ * - Tratamento de erros abrangente
  */
 
 window.relatorios = (function() {
     'use strict';
-
-    // ── Escape HTML (anti-XSS) ──────────────────────────────────────────────
-    function esc(str) {
-        if (str == null) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
 
     // ========================================
     // DEPENDÊNCIAS
@@ -57,14 +35,13 @@ window.relatorios = (function() {
     // ========================================
     // VARIÁVEIS DE ESTADO
     // ========================================
-    let currentPeriod = 'week'; // today, week, month, quarter, year, all — deve coincidir com o <select> padrão
+    let currentPeriod = 'month'; // today, week, month, quarter, year, all
     let charts = {};
     
     // Cache simples para dados agregados (evita reprocessamento a cada refresh)
     let cachedData = {
         period: null,
         sales: [],
-        clients: [],           // cache de clientes para consistência em renderSalesTable
         productSales: null,
         clientPurchases: null,
         payments: null,
@@ -130,10 +107,12 @@ window.relatorios = (function() {
         const state = window.state.get();
         const filteredSales = filterSalesByPeriod(state.sales, currentPeriod);
 
+        // Se o período não mudou e as vendas são as mesmas (pode usar uma flag externa),
+        // mas para simplificar, recalculamos sempre. Em produção, pode-se adicionar
+        // um controle de versão dos dados.
         cachedData = {
             period: currentPeriod,
             sales: filteredSales,
-            clients: state.clients || [],  // [FIX] clientes em cache para evitar re-chamadas
             productSales: aggregateProductSales(filteredSales),
             clientPurchases: aggregateClientPurchases(filteredSales, state.clients),
             payments: aggregatePayments(filteredSales),
@@ -144,14 +123,16 @@ window.relatorios = (function() {
     function aggregateProductSales(sales) {
         const productSales = {};
         sales.forEach(sale => {
-            if (!Array.isArray(sale.items)) return; // [FIX] guard contra dados malformados
             sale.items.forEach(item => {
-                if (!item || !item.id) return;
                 if (!productSales[item.id]) {
-                    productSales[item.id] = { nome: item.nome, qty: 0, total: 0 };
+                    productSales[item.id] = {
+                        nome: item.nome,
+                        qty: 0,
+                        total: 0
+                    };
                 }
-                productSales[item.id].qty   += item.qty  || 0;
-                productSales[item.id].total += (item.preco || 0) * (item.qty || 0);
+                productSales[item.id].qty += item.qty;
+                productSales[item.id].total += item.preco * item.qty;
             });
         });
         return productSales;
@@ -162,14 +143,14 @@ window.relatorios = (function() {
         sales.forEach(sale => {
             if (!sale.clientId) return;
             if (!clientPurchases[sale.clientId]) {
-                const client = (clients || []).find(c => c.id === sale.clientId);
+                const client = clients.find(c => c.id === sale.clientId);
                 clientPurchases[sale.clientId] = {
                     nome: client?.nome || 'Cliente removido',
                     total: 0,
                     count: 0
                 };
             }
-            clientPurchases[sale.clientId].total += sale.total || 0;
+            clientPurchases[sale.clientId].total += sale.total;
             clientPurchases[sale.clientId].count++;
         });
         return clientPurchases;
@@ -184,12 +165,10 @@ window.relatorios = (function() {
     }
 
     function aggregateSalesByDate(sales) {
-        // [FIX] Chave em ISO (yyyy-mm-dd) para ordenação correta no gráfico;
-        // a formatação pt-BR ocorre apenas na renderização do eixo X.
         const salesByDate = {};
         sales.forEach(sale => {
-            const date = new Date(sale.date).toISOString().split('T')[0]; // "2026-03-15"
-            salesByDate[date] = (salesByDate[date] || 0) + (sale.total || 0);
+            const date = new Date(sale.date).toLocaleDateString('pt-BR');
+            salesByDate[date] = (salesByDate[date] || 0) + sale.total;
         });
         return salesByDate;
     }
@@ -243,11 +222,8 @@ window.relatorios = (function() {
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small-muted">
-                                Comparar com
-                                <span class="badge bg-secondary ms-1" title="Funcionalidade prevista para próxima versão">em breve</span>
-                            </label>
-                            <select id="report-compare" class="form-select" disabled title="Comparação entre períodos — em desenvolvimento">
+                            <label class="form-label small-muted">Comparar com</label>
+                            <select id="report-compare" class="form-select">
                                 <option value="none">Sem comparação</option>
                                 <option value="prev">Período anterior</option>
                                 <option value="lastyear">Ano anterior</option>
@@ -385,7 +361,7 @@ window.relatorios = (function() {
             <div class="col-md-3">
                 <div class="metric-card">
                     <div class="metric-label">Vendas no Período</div>
-                    <div class="metric-value">${window.utils.formatCurrencyBR(totalSales)}</div>
+                    <div class="metric-value">R$ ${window.utils.formatCurrency(totalSales)}</div>
                     <small class="text-muted">${sales.length} transações</small>
                 </div>
             </div>
@@ -399,7 +375,7 @@ window.relatorios = (function() {
             <div class="col-md-3">
                 <div class="metric-card">
                     <div class="metric-label">Ticket Médio</div>
-                    <div class="metric-value">${window.utils.formatCurrencyBR(avgTicket)}</div>
+                    <div class="metric-value">R$ ${window.utils.formatCurrency(avgTicket)}</div>
                     <small class="text-muted">por venda</small>
                 </div>
             </div>
@@ -429,12 +405,12 @@ window.relatorios = (function() {
                 <div class="list-group-item d-flex justify-content-between align-items-center">
                     <div>
                         <span class="badge bg-primary me-2">${index + 1}</span>
-                        <strong>${esc(p.nome)}</strong>
+                        <strong>${p.nome}</strong>
                     </div>
                     <div class="text-end">
                         <span class="fw-bold">${p.qty} uni</span>
                         <br>
-                        <small class="text-primary">${window.utils.formatCurrencyBR(p.total)}</small>
+                        <small class="text-primary">R$ ${window.utils.formatCurrency(p.total)}</small>
                     </div>
                 </div>
             `;
@@ -459,11 +435,11 @@ window.relatorios = (function() {
                 <div class="list-group-item d-flex justify-content-between align-items-center">
                     <div>
                         <span class="badge bg-success me-2">${index + 1}</span>
-                        <strong>${esc(c.nome)}</strong>
+                        <strong>${c.nome}</strong>
                         <br>
                         <small class="text-muted">${c.count} compras</small>
                     </div>
-                    <span class="fw-bold text-primary">${window.utils.formatCurrencyBR(c.total)}</span>
+                    <span class="fw-bold text-primary">R$ ${window.utils.formatCurrency(c.total)}</span>
                 </div>
             `;
         });
@@ -472,8 +448,8 @@ window.relatorios = (function() {
     }
 
     function renderSalesTable() {
-        const sales   = cachedData.sales;
-        const clients = cachedData.clients; // [FIX] lê do cache, não re-chama state.get()
+        const sales = cachedData.sales;
+        const clients = window.state.get().clients;
 
         // Ordena por data decrescente e pega as 50 mais recentes
         const recentSales = [...sales]
@@ -492,9 +468,9 @@ window.relatorios = (function() {
         }
 
         return recentSales.map(sale => {
-            const client = sale.clientId ?
+            const client = sale.clientId ? 
                 clients.find(c => c.id === sale.clientId) : null;
-
+            
             return `
                 <tr>
                     <td>
@@ -504,20 +480,20 @@ window.relatorios = (function() {
                     </td>
                     <td>
                         ${client ? `
-                            <strong>${esc(client.nome)}</strong>
+                            <strong>${client.nome}</strong>
                             <br>
-                            <small class="text-muted">${esc(client.fid) || ''}</small>
+                            <small class="text-muted">${client.fid || ''}</small>
                         ` : '<span class="text-muted">Consumidor final</span>'}
                     </td>
                     <td>
-                        <span class="badge bg-info">${sale.items?.length ?? 0} itens</span>
+                        <span class="badge bg-info">${sale.items.length} itens</span>
                         <br>
-                        <small>${(sale.items || []).reduce((sum, i) => sum + (i.qty || 0), 0)} unidades</small>
+                        <small>${sale.items.reduce((sum, i) => sum + i.qty, 0)} unidades</small>
                     </td>
                     <td>
-                        <span class="badge bg-secondary">${esc(sale.payment) || '—'}</span>
+                        <span class="badge bg-secondary">${sale.payment}</span>
                     </td>
-                    <td class="text-primary fw-bold">${window.utils.formatCurrencyBR(sale.total)}</td>
+                    <td class="text-primary fw-bold">R$ ${window.utils.formatCurrency(sale.total)}</td>
                     <td>
                         <button class="btn btn-sm btn-outline-info" onclick="window.relatorios.viewSaleDetails('${sale.id}')">
                             <i class="bi bi-eye"></i>
@@ -544,20 +520,18 @@ window.relatorios = (function() {
         }
 
         const salesByDate = cachedData.salesByDate;
-        // [FIX] Chaves agora são ISO (yyyy-mm-dd) — ordenação lexicográfica é suficiente
-        const labels = Object.keys(salesByDate).sort();
-        const data   = labels.map(l => salesByDate[l]);
-        // Formata labels para exibição no eixo X (dd/mm)
-        const displayLabels = labels.map(l => {
-            const [y, m, d] = l.split('-');
-            return `${d}/${m}`;
+        const labels = Object.keys(salesByDate).sort((a, b) => {
+            const [d1, m1, y1] = a.split('/');
+            const [d2, m2, y2] = b.split('/');
+            return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
         });
+        const data = labels.map(l => salesByDate[l]);
 
         try {
             charts.sales = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: displayLabels,
+                    labels,
                     datasets: [{
                         label: 'Vendas (R$)',
                         data,
@@ -577,7 +551,7 @@ window.relatorios = (function() {
                         tooltip: {
                             callbacks: {
                                 label: (context) => {
-                                    return window.utils.formatCurrencyBR(context.raw);
+                                    return `R$ ${window.utils.formatCurrency(context.raw)}`;
                                 }
                             }
                         }
@@ -586,7 +560,7 @@ window.relatorios = (function() {
                         y: {
                             beginAtZero: true,
                             ticks: {
-                                callback: value => window.utils.formatCurrencyBR(value)
+                                callback: value => 'R$ ' + window.utils.formatCurrency(value)
                             }
                         }
                     }
@@ -609,10 +583,8 @@ window.relatorios = (function() {
         }
 
         const payments = cachedData.payments;
-        // [FIX] Guard contra sale.payment null: filtra chaves inválidas antes de processar
-        const validKeys = Object.keys(payments).filter(k => k && k !== 'null' && k !== 'undefined');
-        const labels = validKeys.map(p => p.charAt(0).toUpperCase() + p.slice(1));
-        const data   = validKeys.map(k => payments[k]);
+        const labels = Object.keys(payments).map(p => p.charAt(0).toUpperCase() + p.slice(1));
+        const data = Object.values(payments);
 
         if (data.length === 0) {
             // Se não houver dados, não cria gráfico
@@ -643,7 +615,7 @@ window.relatorios = (function() {
                                     const value = context.raw;
                                     const total = context.dataset.data.reduce((a, b) => a + b, 0);
                                     const percentage = ((value / total) * 100).toFixed(1);
-                                    return `${context.label}: ${window.utils.formatCurrencyBR(value)} (${percentage}%)`;
+                                    return `${context.label}: R$ ${window.utils.formatCurrency(value)} (${percentage}%)`;
                                 }
                             }
                         }
@@ -720,50 +692,25 @@ window.relatorios = (function() {
     function viewSaleDetails(saleId) {
         if (!checkDependencies()) return;
 
-        // Busca a venda no cache (evita re-chamar state.get())
-        const sale = cachedData.sales.find(s => s.id === saleId)
-            || window.state.get().sales.find(s => s.id === saleId); // fallback se não estiver no cache do período
+        const state = window.state.get();
+        const sale = state.sales.find(s => s.id === saleId);
         if (!sale) {
-            window.utils.showToast('Venda não encontrada', 'warning');
+            window.utils.showToast('Venda não encontrada', 'error');
             return;
         }
 
-        // [FIX] Usa cache de clientes para consistência
-        const client = sale.clientId
-            ? cachedData.clients.find(c => c.id === sale.clientId)
-            : null;
+        const client = sale.clientId ? 
+            state.clients.find(c => c.id === sale.clientId) : null;
 
-        // [FIX] esc() em todos os campos exibidos (anti-XSS)
-        let itemsRows = '';
-        (sale.items || []).forEach(item => {
-            const subtotal = (item.preco || 0) * (item.qty || 0);
-            itemsRows += `
-                <tr>
-                    <td>${esc(item.nome)}</td>
-                    <td>${item.qty || 0}</td>
-                    <td>${window.utils.formatCurrencyBR(item.preco)}</td>
-                    <td>${window.utils.formatCurrencyBR(subtotal)}</td>
-                </tr>
-            `;
-        });
-
-        const clientBlock = client ? `
-            <div class="mb-3">
-                <small class="text-muted d-block">Cliente</small>
-                <strong>${esc(client.nome)}</strong>
-                <br>
-                <small class="text-muted">${esc(client.fid) || ''}</small>
-            </div>
-        ` : '';
-
-        const detailsHTML = `
+        let detailsHTML = `
             <div class="text-start">
                 <div class="alert alert-primary">
-                    <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex justify-content-between">
                         <span>Total da venda:</span>
-                        <strong class="h5 mb-0">${window.utils.formatCurrencyBR(sale.total)}</strong>
+                        <strong class="h5">R$ ${window.utils.formatCurrency(sale.total)}</strong>
                     </div>
                 </div>
+                
                 <div class="row g-3 mb-3">
                     <div class="col-6">
                         <small class="text-muted d-block">Data/Hora</small>
@@ -771,10 +718,19 @@ window.relatorios = (function() {
                     </div>
                     <div class="col-6">
                         <small class="text-muted d-block">Pagamento</small>
-                        <span class="badge bg-primary">${esc(sale.payment) || '—'}</span>
+                        <span class="badge bg-primary">${sale.payment}</span>
                     </div>
                 </div>
-                ${clientBlock}
+                
+                ${client ? `
+                    <div class="mb-3">
+                        <small class="text-muted d-block">Cliente</small>
+                        <strong>${client.nome}</strong>
+                        <br>
+                        <small class="text-muted">${client.fid || ''}</small>
+                    </div>
+                ` : ''}
+                
                 <hr>
                 <h6>Itens da venda</h6>
                 <div class="table-responsive">
@@ -783,89 +739,111 @@ window.relatorios = (function() {
                             <tr>
                                 <th>Produto</th>
                                 <th>Qtd</th>
-                                <th>Preço unit.</th>
+                                <th>Preço</th>
                                 <th>Subtotal</th>
                             </tr>
                         </thead>
-                        <tbody>${itemsRows}</tbody>
+                        <tbody>
+        `;
+
+        sale.items.forEach(item => {
+            detailsHTML += `
+                <tr>
+                    <td>${item.nome}</td>
+                    <td>${item.qty}</td>
+                    <td>R$ ${window.utils.formatCurrency(item.preco)}</td>
+                    <td>R$ ${window.utils.formatCurrency(item.preco * item.qty)}</td>
+                </tr>
+            `;
+        });
+
+        detailsHTML += `
+                        </tbody>
                     </table>
                 </div>
             </div>
         `;
 
-        // [FIX] Usa window.utils.showAlert para garantir fallback quando Swal não está disponível.
-        // Se Swal estiver presente, injeta o HTML manualmente para preservar a tabela de itens.
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                title: 'Detalhes da Venda',
-                html: detailsHTML,
-                icon: 'info',
-                width: '600px',
-                confirmButtonColor: '#10b981',
-                confirmButtonText: 'Fechar'
-            });
-        } else {
-            // Fallback nativo: abre em janela pop-up simples
-            const win = window.open('', '_blank', 'width=620,height=500,scrollbars=yes');
-            if (win) {
-                win.document.write(`
-                    <!doctype html><html><head>
-                    <meta charset="utf-8">
-                    <title>Detalhes da Venda</title>
-                    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-                    </head><body class="p-4">${detailsHTML}
-                    <button class="btn btn-success mt-3" onclick="window.close()">Fechar</button>
-                    </body></html>
-                `);
-                win.document.close();
-            }
-        }
+        Swal.fire({
+            title: 'Detalhes da Venda',
+            html: detailsHTML,
+            icon: 'info',
+            width: '600px',
+            confirmButtonText: 'Fechar'
+        });
     }
-
-
+    // FIX BUG-05: exportarPDF removida — chamava prepararDadosParaTabela() que nunca foi definida.
+    // A exportação PDF é feita via window.print() em exportFullReport(), que já funciona corretamente.
     // ========================================
     // EXPORTAÇÕES
     // ========================================
     function exportFullReport() {
-        if (!checkDependencies()) return;
+    if (!checkDependencies()) return;
 
-        const format = document.getElementById('report-format')?.value || 'pdf';
+    const format = document.getElementById('report-format')?.value || 'pdf';
 
-        if (format === 'pdf') {
-            window.print();
-            window.utils.showToast('Utilize "Salvar como PDF" na janela de impressão', 'info');
-        } else if (format === 'excel') {
-            exportSales();
-        } else {
-            window.utils.showToast('Formato não implementado', 'info');
+    if (format === 'pdf') {
+        // Garantir que jsPDF está carregado
+        if (typeof window.jspdf === 'undefined') {
+            window.utils.showToast('Biblioteca jsPDF não carregada', 'error');
+            return;
         }
-    }
 
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        // Título
+        doc.setFontSize(18);
+        doc.text('Relatório de Vendas', 14, 22);
+        doc.setFontSize(11);
+        doc.text(`Período: ${document.getElementById('report-period').selectedOptions[0].text}`, 14, 30);
+        doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 14, 36);
+
+        // Dados da tabela
+        const state = window.state.get();
+        const filteredSales = filterSalesByPeriod(state.sales, currentPeriod);
+        const tableData = filteredSales.map(s => [
+            new Date(s.date).toLocaleDateString('pt-BR'),
+            s.items.length,
+            s.payment,
+            `R$ ${s.total.toFixed(2)}`
+        ]);
+
+        doc.autoTable({
+            startY: 42,
+            head: [['Data', 'Itens', 'Pagamento', 'Total']],
+            body: tableData,
+            theme: 'striped',
+            headStyles: { fillColor: [13, 110, 253] }
+        });
+
+        doc.save(`relatorio_vendas_${new Date().toISOString().split('T')[0]}.pdf`);
+        window.utils.showToast('PDF gerado com sucesso!', 'success');
+    } else if (format === 'excel') {
+        exportSales();
+    } else {
+        window.utils.showToast('Formato não implementado', 'info');
+    }
+}
     function exportSales() {
         if (!checkDependencies()) return;
 
-        // Usa o cache de clientes para consistência com a view
-        const clients      = cachedData.clients;
-        const filteredSales = cachedData.sales;
+        const state = window.state.get();
+        const filteredSales = filterSalesByPeriod(state.sales, currentPeriod);
 
         const data = filteredSales.map(sale => {
-            const client = sale.clientId
-                ? clients.find(c => c.id === sale.clientId)
-                : null;
-
-            const items    = Array.isArray(sale.items) ? sale.items : [];
-            const unidades = items.reduce((sum, i) => sum + (i.qty || 0), 0);
+            const client = sale.clientId ? 
+                state.clients.find(c => c.id === sale.clientId) : null;
 
             return {
-                'Data':           new Date(sale.date).toLocaleDateString('pt-BR'),
-                'Hora':           new Date(sale.date).toLocaleTimeString('pt-BR'),
-                'Cliente':        client?.nome || 'Consumidor final',
-                'Código Cliente': client?.fid  || '',
-                'Itens':          items.length,
-                'Unidades':       unidades,
-                'Pagamento':      sale.payment || '',
-                // [FIX] Total como número puro para o Excel processar corretamente
-                'Total (R$)':     Number((sale.total || 0).toFixed(2))
+                'Data': new Date(sale.date).toLocaleDateString('pt-BR'),
+                'Hora': new Date(sale.date).toLocaleTimeString('pt-BR'),
+                'Cliente': client?.nome || 'Consumidor final',
+                'Código Cliente': client?.fid || '',
+                'Itens': sale.items.length,
+                'Unidades': sale.items.reduce((sum, i) => sum + i.qty, 0),
+                'Pagamento': sale.payment,
+                'Total': window.utils.formatCurrency(sale.total)
             };
         });
 
@@ -874,7 +852,7 @@ window.relatorios = (function() {
             window.utils.showToast('Vendas exportadas com sucesso!', 'success');
         } catch (error) {
             console.error('Erro ao exportar CSV:', error);
-            window.utils.showToast('Erro ao exportar. Tente novamente.', 'danger');
+            window.utils.showToast('Erro ao exportar. Tente novamente.', 'error');
         }
     }
 

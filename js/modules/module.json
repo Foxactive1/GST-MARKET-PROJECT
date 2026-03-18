@@ -1,0 +1,8 @@
+{
+ "name": "price-intelligence",
+ "title": "Inteligência de Preços",
+ "version": "1.0",
+ "author": "InNovaIdeia",
+ "description": "Robô de pesquisa e comparação de preços de concorrentes",
+ "entry": "price-intelligence.js"
+}

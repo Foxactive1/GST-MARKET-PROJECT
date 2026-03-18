@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * MÓDULO PDV (PONTO DE VENDA) - VERSÃO 2.3.0 (2026-03-14)
+ * MÓDULO PDV (PONTO DE VENDA) - VERSÃO REVISADA 2.2.0
  * ============================================================================
  * 
  * Responsável por:
@@ -16,18 +16,16 @@
  * - Relatórios de caixa
  * - Produtos favoritos
  * 
- * Correções v2.3.0:
- * - toast 'error' → 'danger' (tipo válido)
- * - saveCashierSession / saveSuspendedSales / saveFavoriteProducts sincronizados com window.state
- * - Fechar caixa limpa também window.state.setPdvSession(null)
- * - Pontos registrados no histórico de fidelidade (window.fidelidade_recordPoints)
- * - filterCategory corrigido para usar classes pdv-cat-tab
- * - updateCart com seletor de sumário estável (.pdv-cart-summary)
- * - Botões Finalizar/Suspender atualizados dinamicamente sem re-render completo
+ * Melhorias v2.2.0:
+ * - Integração com utils aprimorados (parseMonetaryValue, formatCurrency, máscaras)
+ * - Uso correto dos métodos de atualização do state (imutabilidade)
+ * - Verificação de dependências no início
+ * - Parsing consistente de valores monetários em todos os inputs
+ * - Máscaras de moeda nos campos de entrada
  * 
  * @author Dione Castro Alves - InNovaIdeia
- * @version 2.3.0
- * @date 2026-03-14
+ * @version 2.2.0
+ * @date 2026
  */
 
 window.pdv = (function() {
@@ -104,45 +102,7 @@ window.pdv = (function() {
         loadCashierSession();
         loadSuspendedSales();
         loadFavoriteProducts();
-        loadCart(); // MELHORIA: restaura carrinho ativo se a aba foi fechada acidentalmente
         checkCashierStatus();
-    }
-
-    // MELHORIA: Persiste o carrinho ativo no localStorage para sobreviver a fechamentos acidentais
-    function saveCart() {
-        try {
-            localStorage.setItem('pdv-cart', JSON.stringify({
-                cart: cart,
-                selectedClient: selectedClient,
-                globalDiscount: globalDiscount
-            }));
-        } catch (error) {
-            console.error('Erro ao salvar carrinho:', error);
-        }
-    }
-
-    function loadCart() {
-        try {
-            const saved = localStorage.getItem('pdv-cart');
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                // Só restaura se o caixa estiver aberto — carrinho sem caixa não faz sentido
-                if (cashierSession && cashierSession.isOpen) {
-                    cart           = parsed.cart           || [];
-                    selectedClient = parsed.selectedClient || null;
-                    globalDiscount = parsed.globalDiscount || 0;
-                    if (cart.length > 0) {
-                        console.log('[PDV] Carrinho restaurado:', cart.length, 'item(s)');
-                    }
-                } else {
-                    // Caixa fechado — descarta o carrinho salvo
-                    localStorage.removeItem('pdv-cart');
-                }
-            }
-        } catch (error) {
-            console.error('Erro ao restaurar carrinho:', error);
-            cart = [];
-        }
     }
     
     function loadCashierSession() {
@@ -510,22 +470,7 @@ window.pdv = (function() {
     }
 
     function renderClientSelector(clients) {
-        // FIX BUG-CLIENT: o elemento #client-select-area DEVE sempre existir no DOM
-        // para que toggleClient() consiga encontrá-lo via getElementById e fazer replaceWith().
-        // Antes retornava '' quando selectedClient === null, tornando o botão inoperante
-        // até um render() completo (ex: abrir/fechar atalhos).
-
-        if (!selectedClient) {
-            // Placeholder visível e clicável — não há lógica nova, apenas o container sempre presente
-            return `
-                <div id="client-select-area" class="pdv-client-area pdv-client-placeholder"
-                     onclick="window.pdv.toggleClient()" title="Vincular cliente">
-                    <i class="bi bi-person-plus"></i>
-                    <span>Vincular cliente à venda</span>
-                </div>
-            `;
-        }
-
+        if (!selectedClient) return '';
         return `
             <div id="client-select-area" class="pdv-client-area">
                 <div class="pdv-client-header">
@@ -794,8 +739,7 @@ window.pdv = (function() {
             .pdv-cart-icon-btn.warn:hover { background:rgba(245,158,11,.15); }
             .pdv-cart-icon-btn.danger { color:#f87171; }
             .pdv-cart-icon-btn.danger:hover { background:rgba(248,113,113,.15); }
-            .pdv-client-area { border-bottom:1px solid rgba(255,255,255,.07); background:rgba(255,255,255,.03); }
-            .pdv-client-area:not(.pdv-client-placeholder) { padding:10px 14px; }
+            .pdv-client-area { padding:10px 14px; border-bottom:1px solid rgba(255,255,255,.07); background:rgba(255,255,255,.03); }
             .pdv-client-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
             .pdv-client-label { font-size:0.75rem; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:.05em; display:flex; align-items:center; gap:5px; }
             .pdv-client-remove { background:none; border:none; color:#f87171; font-size:0.75rem; cursor:pointer; padding:0; display:flex; align-items:center; gap:2px; }
@@ -853,26 +797,18 @@ window.pdv = (function() {
             .pdv-suspend-btn:hover:not(:disabled) { border-color:#f59e0b; color:#f59e0b; background:rgba(245,158,11,.07); }
             .pdv-suspend-btn:disabled { opacity:.3; cursor:not-allowed; }
 
-            /* ====== KEYBOARD SHORTCUTS
-               FIX BUG: kb-panel era position:fixed; right:20px sobrepondo o carrinho (col-lg-5).
-               Movido para bottom-LEFT e z-index reduzido para não bloquear interações do cart.
-            ====== */
-            .pdv-kb-toggle-wrap { position:fixed; bottom:24px; left:24px; z-index:90; }
+            /* ====== KEYBOARD SHORTCUTS ====== */
+            .pdv-kb-toggle-wrap { position:fixed; bottom:80px; right:20px; z-index:999; }
             .pdv-kb-toggle-btn { width:38px; height:38px; border-radius:50%; border:1px solid #e5e7eb; background:#fff; color:#6b7280; box-shadow:0 2px 8px rgba(0,0,0,.1); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:0.95rem; transition:all .15s; }
             .pdv-kb-toggle-btn:hover { border-color:#10b981; color:#059669; }
-            .pdv-kb-panel { position:fixed; bottom:24px; left:24px; z-index:90; background:#1e293b; border-radius:12px; border:1px solid rgba(255,255,255,.08); box-shadow:0 8px 24px rgba(0,0,0,.3); width:200px; overflow:hidden; }
+            .pdv-kb-panel { position:fixed; bottom:80px; right:20px; z-index:999; background:#1e293b; border-radius:12px; border:1px solid rgba(255,255,255,.08); box-shadow:0 8px 24px rgba(0,0,0,.3); width:190px; overflow:hidden; }
             .pdv-kb-header { display:flex; align-items:center; gap:7px; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.06); color:#94a3b8; font-size:0.78rem; font-weight:700; }
             .pdv-kb-header span { flex:1; }
             .pdv-kb-close { background:none; border:none; color:#64748b; cursor:pointer; padding:0; width:20px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:4px; font-size:0.9rem; }
             .pdv-kb-close:hover { color:#f9fafb; background:rgba(255,255,255,.06); }
             .pdv-kb-list { padding:8px 12px 12px; }
-            .pdv-kb-item { display:flex; justify-content:space-between; align-items:center; padding:5px 0; font-size:0.75rem; color:#64748b; }
+            .pdv-kb-item { display:flex; justify-content:space-between; align-items:center; padding:4px 0; font-size:0.75rem; color:#64748b; }
             .pdv-kb-item kbd { background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.1); border-radius:5px; padding:2px 7px; font-size:0.67rem; font-family:monospace; color:#e2e8f0; }
-
-            /* ====== CLIENT PLACEHOLDER ====== */
-            .pdv-client-placeholder { display:flex; align-items:center; gap:8px; cursor:pointer; color:#475569; font-size:0.78rem; font-weight:600; border:1.5px dashed rgba(255,255,255,.12); border-radius:8px; margin:8px 14px; padding:8px 12px; background:rgba(255,255,255,.02); transition:all .15s; }
-            .pdv-client-placeholder:hover { background:rgba(16,185,129,.06); border-color:rgba(16,185,129,.3); color:#10b981; }
-            .pdv-client-placeholder i { font-size:1rem; }
         `;
         document.head.appendChild(style);
     }
@@ -895,8 +831,8 @@ window.pdv = (function() {
         
         const product = window.state.getProducts().find(p => p.id === productId);
         if (!product) {
-            playSound(220, 200);
-            window.utils.showToast('Produto não encontrado', 'danger');
+            playSound(220, 200); // Error beep
+            window.utils.showToast('Produto não encontrado', 'error');
             return;
         }
         
@@ -996,7 +932,6 @@ window.pdv = (function() {
                 cart = [];
                 selectedClient = null;
                 globalDiscount = 0;
-                try { localStorage.removeItem('pdv-cart'); } catch (e) { /* seguro ignorar */ }
                 updateCart();
                 window.utils.showToast('Carrinho limpo', 'info');
             }
@@ -1004,14 +939,15 @@ window.pdv = (function() {
     }
     
     function updateCart() {
-        // Atualiza itens
+        // Atualiza visualização do carrinho
         const cartItemsContainer = document.getElementById('cart-items');
         if (cartItemsContainer) {
             cartItemsContainer.innerHTML = renderCartItems();
         }
         
-        // Atualiza sumário — usa classe estável em vez de seletor frágil
-        const summaryContainer = document.querySelector('.pdv-cart-summary, .pdv-cart-summary-empty');
+        // FIX BUG-08: outerHTML invalida a referência após substituição.
+        // Usar replaceWith() para substituir o nó com segurança.
+        const summaryContainer = cartItemsContainer?.parentElement?.querySelector('.border-top');
         if (summaryContainer) {
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = renderCartSummary();
@@ -1026,14 +962,6 @@ window.pdv = (function() {
             countBadge.textContent = itemCount;
         }
         
-        // Atualiza botões que dependem do estado do carrinho (Suspender / Finalizar)
-        const finalizeBtn = document.querySelector('.pdv-finalize-btn');
-        const suspendBtn  = document.querySelector('.pdv-suspend-btn');
-        const suspendIcon = document.querySelector('.pdv-cart-icon-btn.warn');
-        if (finalizeBtn) finalizeBtn.disabled = cart.length === 0;
-        if (suspendBtn)  suspendBtn.disabled  = cart.length === 0;
-        if (suspendIcon) suspendIcon.disabled  = cart.length === 0;
-
         // Atualiza currentSale
         currentSale = {
             subtotal: calculateSubtotal(),
@@ -1042,9 +970,6 @@ window.pdv = (function() {
             items: cart.length,
             client: selectedClient
         };
-
-        // Persiste carrinho ativo
-        saveCart();
     }
     
     // ========================================
@@ -1080,7 +1005,7 @@ window.pdv = (function() {
                                id="discount-amount" 
                                class="form-control" 
                                placeholder="0,00"
-                               oninput="let _v=this.value.replace(/\D/g,'');_v=(Number(_v)/100).toFixed(2);this.value=_v.replace('.',',').replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.');" >
+                               oninput="this.value = window.utils.maskCurrencyInput(this.value)">
                     </div>
                     
                     <div id="discount-preview" class="alert alert-secondary d-none">
@@ -1101,7 +1026,7 @@ window.pdv = (function() {
                 function updatePreview() {
                     const type = typeSelect.value;
                     const amountStr = amountInput.value;
-                    const amount = window.utils.parseCurrencyBR(amountStr);
+                    const amount = window.utils.parseMonetaryValue(amountStr);
                     
                     if (amount > 0) {
                         let discountValue = 0;
@@ -1138,7 +1063,7 @@ window.pdv = (function() {
             preConfirm: () => {
                 const type = document.getElementById('discount-type').value;
                 const amountStr = document.getElementById('discount-amount').value;
-                const amount = window.utils.parseCurrencyBR(amountStr);
+                const amount = window.utils.parseMonetaryValue(amountStr);
                 
                 if (isNaN(amount) || amount <= 0) {
                     Swal.showValidationMessage('Informe um valor válido');
@@ -1372,7 +1297,7 @@ window.pdv = (function() {
                                id="amount-paid" 
                                class="form-control form-control-lg" 
                                placeholder="Ex: 50,00"
-                               oninput="let _v=this.value.replace(/\D/g,'');_v=(Number(_v)/100).toFixed(2);this.value=_v.replace('.',',').replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.');" >
+                               oninput="this.value = window.utils.maskCurrencyInput(this.value)">
                         <small class="text-muted">Digite o valor recebido</small>
                     </div>
                     
@@ -1436,7 +1361,7 @@ window.pdv = (function() {
         if (amountPaid) {
             amountPaid.addEventListener('input', () => {
                 const paidStr = amountPaid.value;
-                const paid = window.utils.parseCurrencyBR(paidStr);
+                const paid = window.utils.parseMonetaryValue(paidStr);
                 
                 if (!isNaN(paid) && paid >= 0) {
                     const change = paid - total;
@@ -1473,7 +1398,7 @@ window.pdv = (function() {
         
         if (payment === 'dinheiro') {
             const paidStr = document.getElementById('amount-paid').value;
-            const paid = window.utils.parseCurrencyBR(paidStr);
+            const paid = window.utils.parseMonetaryValue(paidStr);
             
             if (isNaN(paid) || paid < total) {
                 Swal.showValidationMessage('Valor recebido insuficiente ou inválido');
@@ -1553,15 +1478,6 @@ window.pdv = (function() {
                         `${client.nome} ganhou ${points} pontos!`,
                         'success'
                     );
-                    // Registra no histórico de fidelidade
-                    if (typeof window.fidelidade_recordPoints === 'function') {
-                        window.fidelidade_recordPoints(
-                            client.id,
-                            client.nome,
-                            points,
-                            `Venda #${sale.id.substring(0, 8)}`
-                        );
-                    }
                 }, 1500);
             }
         }
@@ -1577,8 +1493,6 @@ window.pdv = (function() {
         cart = [];
         selectedClient = null;
         globalDiscount = 0;
-        // Remove carrinho salvo — venda concluída com sucesso, não há o que restaurar
-        try { localStorage.removeItem('pdv-cart'); } catch (e) { /* seguro ignorar */ }
         
         // Som de sucesso
         playSound(880, 200);
@@ -2053,10 +1967,6 @@ window.pdv = (function() {
     function saveSuspendedSales() {
         try {
             localStorage.setItem('pdv-suspended-sales', JSON.stringify(suspendedSales));
-            // Sincroniza com o state central se disponível
-            if (typeof window.state?.setSuspendedSales === 'function') {
-                window.state.setSuspendedSales(suspendedSales);
-            }
         } catch (error) {
             console.error('Erro ao salvar vendas suspensas:', error);
         }
@@ -2086,7 +1996,7 @@ window.pdv = (function() {
                                id="cashier-initial-value" 
                                class="form-control" 
                                placeholder="0,00"
-                               oninput="let _v=this.value.replace(/\D/g,'');_v=(Number(_v)/100).toFixed(2);this.value=_v.replace('.',',').replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.');" >
+                               oninput="this.value = window.utils.maskCurrencyInput(this.value)">
                         <small class="text-muted">Informe o valor em dinheiro disponível</small>
                     </div>
                     
@@ -2104,7 +2014,7 @@ window.pdv = (function() {
             preConfirm: () => {
                 const operator = document.getElementById('cashier-operator').value.trim();
                 const initialStr = document.getElementById('cashier-initial-value').value;
-                const initialValue = window.utils.parseCurrencyBR(initialStr);
+                const initialValue = window.utils.parseMonetaryValue(initialStr);
                 const notes = document.getElementById('cashier-notes').value.trim();
                 
                 if (!operator) {
@@ -2212,7 +2122,7 @@ window.pdv = (function() {
                                id="actual-value" 
                                class="form-control form-control-lg" 
                                placeholder="${window.utils.formatCurrency(expectedValue)}"
-                               oninput="let _v=this.value.replace(/\D/g,'');_v=(Number(_v)/100).toFixed(2);this.value=_v.replace('.',',').replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.');" 
+                               oninput="this.value = window.utils.maskCurrencyInput(this.value)"
                                value="${window.utils.formatCurrency(expectedValue)}">
                     </div>
                     
@@ -2236,7 +2146,7 @@ window.pdv = (function() {
                 
                 actualInput.addEventListener('input', () => {
                     const actualStr = actualInput.value;
-                    const actual = window.utils.parseCurrencyBR(actualStr);
+                    const actual = window.utils.parseMonetaryValue(actualStr);
                     const diff = actual - expectedValue;
                     
                     if (!isNaN(actual) && Math.abs(diff) > 0.01) {
@@ -2260,7 +2170,7 @@ window.pdv = (function() {
             },
             preConfirm: () => {
                 const actualStr = document.getElementById('actual-value').value;
-                const actualValue = window.utils.parseCurrencyBR(actualStr);
+                const actualValue = window.utils.parseMonetaryValue(actualStr);
                 const notes = document.getElementById('closing-notes').value.trim();
                 
                 if (isNaN(actualValue) || actualValue < 0) {
@@ -2287,9 +2197,6 @@ window.pdv = (function() {
                 // Limpa sessão atual
                 cashierSession = null;
                 localStorage.removeItem('pdv-cashier-session');
-                if (typeof window.state?.setPdvSession === 'function') {
-                    window.state.setPdvSession(null);
-                }
                 
                 window.utils.showToast('Caixa fechado com sucesso!', 'success');
                 render();
@@ -2381,7 +2288,7 @@ window.pdv = (function() {
                                id="withdrawal-amount" 
                                class="form-control form-control-lg" 
                                placeholder="0,00"
-                               oninput="let _v=this.value.replace(/\D/g,'');_v=(Number(_v)/100).toFixed(2);this.value=_v.replace('.',',').replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.');" 
+                               oninput="this.value = window.utils.maskCurrencyInput(this.value)"
                                required>
                     </div>
                     
@@ -2409,7 +2316,7 @@ window.pdv = (function() {
             cancelButtonText: 'Cancelar',
             preConfirm: () => {
                 const amountStr = document.getElementById('withdrawal-amount').value;
-                const amount = window.utils.parseCurrencyBR(amountStr);
+                const amount = window.utils.parseMonetaryValue(amountStr);
                 const reason = document.getElementById('withdrawal-reason').value;
                 const notes = document.getElementById('withdrawal-notes').value.trim();
                 
@@ -2466,7 +2373,7 @@ window.pdv = (function() {
                                id="reinforcement-amount" 
                                class="form-control form-control-lg" 
                                placeholder="0,00"
-                               oninput="let _v=this.value.replace(/\D/g,'');_v=(Number(_v)/100).toFixed(2);this.value=_v.replace('.',',').replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.');" 
+                               oninput="this.value = window.utils.maskCurrencyInput(this.value)"
                                required>
                     </div>
                     
@@ -2493,7 +2400,7 @@ window.pdv = (function() {
             cancelButtonText: 'Cancelar',
             preConfirm: () => {
                 const amountStr = document.getElementById('reinforcement-amount').value;
-                const amount = window.utils.parseCurrencyBR(amountStr);
+                const amount = window.utils.parseMonetaryValue(amountStr);
                 const reason = document.getElementById('reinforcement-reason').value;
                 const notes = document.getElementById('reinforcement-notes').value.trim();
                 
@@ -2686,10 +2593,6 @@ window.pdv = (function() {
     function saveCashierSession() {
         try {
             localStorage.setItem('pdv-cashier-session', JSON.stringify(cashierSession));
-            // Sincroniza com o state central se disponível
-            if (typeof window.state?.setPdvSession === 'function') {
-                window.state.setPdvSession(cashierSession);
-            }
         } catch (error) {
             console.error('Erro ao salvar sessão do caixa:', error);
         }
@@ -2815,10 +2718,6 @@ window.pdv = (function() {
         
         try {
             localStorage.setItem('pdv-favorite-products', JSON.stringify(favoriteProducts));
-            // Sincroniza com o state central se disponível
-            if (typeof window.state?.setFavorites === 'function') {
-                window.state.setFavorites(favoriteProducts);
-            }
             window.utils.showToast('Favoritos salvos!', 'success');
         } catch (error) {
             console.error('Erro ao salvar favoritos:', error);
@@ -2845,13 +2744,20 @@ window.pdv = (function() {
     }
     
     function filterCategory(category, el) {
+        // FIX BUG-06: event global implícito substituído por parâmetro explícito `el`
         currentFilter = category;
         
-        // Atualiza UI — remove active de todos, aplica no clicado
-        document.querySelectorAll('.pdv-cat-tab').forEach(btn => {
-            btn.classList.remove('active');
+        // Atualiza UI
+        const buttons = document.querySelectorAll('[onclick*="filterCategory"]');
+        buttons.forEach(btn => {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-outline-primary');
         });
-        if (el) el.classList.add('active');
+        
+        if (el) {
+            el.classList.remove('btn-outline-primary');
+            el.classList.add('btn-primary');
+        }
         
         // Atualiza grid
         const grid = document.getElementById('product-grid');
@@ -3111,7 +3017,7 @@ window.pdv = (function() {
 	    hideQuickActions,
 	    toggleQuickActions,
 	    // Utilitários expostos (opcional)
-	    parseCurrencyBR: window.utils.parseCurrencyBR,
+	    parseMonetaryValue: window.utils.parseMonetaryValue,
 	    formatCurrency: window.utils.formatCurrency
 	};
 })();
