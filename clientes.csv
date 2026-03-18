@@ -1,0 +1,6 @@
+nome,cpf,fone,email,birthDate,gender
+"Joana Silva","123.456.789-00","(11) 98765-4321","joana@email.com","1985-03-12","F"
+"Carlos Souza","987.654.321-00","(21) 99876-5432","carlos@email.com","1990-07-25","M"
+"Mariana Oliveira","111.222.333-44","(31) 97777-8888","mariana@email.com","1982-11-03","F"
+"Fernando Lima","555.666.777-88","(41) 96666-5555","fernando@email.com","1978-05-20","M"
+"Amanda Costa","999.888.777-66","(51) 95555-4444","amanda@email.com","1995-09-14","F"

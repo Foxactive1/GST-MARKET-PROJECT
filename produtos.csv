@@ -1,0 +1,13 @@
+nome,code,categoria,qtd,preco,minStock,unit
+"Arroz Parboilizado 5kg","7891000012345","Alimentos",50,22.90,10,"KG"
+"Feijão Carioca 1kg","7891000012346","Alimentos",120,8.75,20,"KG"
+"Óleo de Soja 900ml","7891000012347","Alimentos",80,7.39,15,"UN"
+"Açúcar Refinado 1kg","7891000012348","Alimentos",200,4.99,30,"KG"
+"Café Torrado 500g","7891000012349","Bebidas",45,12.90,10,"UN"
+"Leite UHT 1L","7891000012350","Bebidas",150,4.50,25,"L"
+"Refrigerante Cola 2L","7891000012351","Bebidas",90,8.99,20,"UN"
+"Sabonete Líquido 200ml","7891000012352","Higiene",60,6.50,12,"UN"
+"Shampoo Anticaspa 350ml","7891000012353","Higiene",40,15.30,8,"UN"
+"Detergente Líquido 500ml","7891000012354","Limpeza",110,2.99,20,"UN"
+"Água Sanitária 2L","7891000012355","Limpeza",70,4.25,15,"UN"
+"Esponja de Aço Pacote 8un","7891000012356","Limpeza",140,3.50,25,"PCT"
