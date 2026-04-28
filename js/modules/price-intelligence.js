@@ -13,12 +13,24 @@
  * - [QUALIDADE]  saveToHistory() centraliza gravação no localStorage.
  * - [QUALIDADE]  Timeout elevado para 10s (adequado para rede móvel/Termux).
  *
+ * Correções aplicadas (v3.2.0 → v3.3.0):
+ * - [BUG FIX 1]  renderHistoryRows() protegida com try/catch: localStorage corrompido
+ *                agora reseta a chave e exibe estado vazio em vez de quebrar render().
+ * - [BUG FIX 2]  analyzeProduct() no histórico migrado de onclick inline com string
+ *                para event delegation via data-id (evita quebra com IDs especiais).
+ *                Adicionada initHistoryEvents() com flag _delegationAttached.
+ * - [BUG FIX 3]  clearHistory() agora invalida searchCache (memória) e sessionStorage.
+ *                Antes, dados antigos permaneciam visíveis após limpar o histórico.
+ * - [BUG FIX 4]  Adicionada destroyCharts() chamada no início de render().
+ *                Elimina memory leak e erro "Canvas is already in use" do Chart.js
+ *                ao navegar entre módulos e retornar ao painel de preços.
+ *
  * DEPENDÊNCIA BACKEND: adicionar ao app.py a rota /api/price-search
  * (ver comentário no bloco de constantes abaixo)
  *
  * @author Dione Castro Alves - InNovaIdeia
- * @version 3.2.0
- * @date 2026-03-12
+ * @version 3.3.0
+ * @date 2026-04-27
  */
 
 window.priceIntelligence = (function () {
@@ -41,6 +53,18 @@ window.priceIntelligence = (function () {
             return false;
         }
         return true;
+    }
+
+    /**
+     * [FIX 4] Destrói todas as instâncias Chart.js ativas antes de re-renderizar.
+     * Sem isso, cada chamada a render() cria instâncias orphaned que vazam memória
+     * e causam o aviso "Canvas is already in use" do Chart.js.
+     */
+    function destroyCharts() {
+        Object.values(charts).forEach(chart => {
+            try { chart?.destroy(); } catch (e) {}
+        });
+        charts = {};
     }
 
     // ========================================
@@ -122,6 +146,10 @@ window.priceIntelligence = (function () {
     // RENDERIZAÇÃO PRINCIPAL
     // ========================================
     function render() {
+        // [FIX 4] Destrói gráficos órfãos antes de reescrever o DOM.
+        // Evita memory leak e o erro "Canvas is already in use" do Chart.js.
+        destroyCharts();
+
         if (!checkDependencies()) {
             document.getElementById('mainContent').innerHTML = `
                 <div class="alert alert-danger">
@@ -284,7 +312,16 @@ window.priceIntelligence = (function () {
     // RENDERIZAÇÃO DO HISTÓRICO
     // ========================================
     function renderHistoryRows() {
-        const history = getHistory();
+        // [FIX 1] Protege contra localStorage corrompido — se getHistory() lançar,
+        // reseta a chave e exibe estado vazio em vez de quebrar o render() inteiro.
+        let history = [];
+        try {
+            history = getHistory();
+        } catch (e) {
+            console.error('[priceIntelligence] Histórico corrompido, resetando:', e);
+            try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+        }
+
         if (history.length === 0) {
             return `<tr><td colspan="6" class="text-center text-muted py-4">Nenhum preço pesquisado ainda</td></tr>`;
         }
@@ -303,6 +340,8 @@ window.priceIntelligence = (function () {
                 ? `<span class="badge bg-success" title="Vinculado a produto do sistema">${safeName}</span>`
                 : `<span class="text-muted">Não vinculado</span>`;
 
+            // [FIX 2] onclick com string removido — usa data-id + event delegation
+            // (evita quebra quando item.id contém aspas mesmo após escapeHtml)
             return `
                 <tr>
                     <td>${safeName}</td>
@@ -311,14 +350,29 @@ window.priceIntelligence = (function () {
                     <td>${window.utils.formatDate(item.date)}</td>
                     <td>${productLink}</td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary"
-                                onclick="window.priceIntelligence.analyzeProduct('${safeId}')">
+                        <button class="btn btn-sm btn-outline-primary btn-analyze-history"
+                                data-id="${safeId}">
                             <i class="bi bi-graph-up"></i> Analisar
                         </button>
                     </td>
                 </tr>
             `;
         }).join('');
+    }
+
+    /**
+     * [FIX 2] Registra event delegation no history-body após inserir as linhas.
+     * Chamado em loadHistory() — substitui onclick inline para analyzeProduct.
+     */
+    function initHistoryEvents() {
+        const historyBody = document.getElementById('history-body');
+        if (!historyBody || historyBody._delegationAttached) return;
+        historyBody.addEventListener('click', (e) => {
+            const btn = e.target.closest('.btn-analyze-history');
+            if (btn) analyzeProduct(btn.dataset.id);
+        });
+        // Marca para não registrar o listener mais de uma vez por render()
+        historyBody._delegationAttached = true;
     }
 
     // ========================================
@@ -811,7 +865,9 @@ window.priceIntelligence = (function () {
     function loadHistory() {
         const historyBody = document.getElementById('history-body');
         if (!historyBody) return;
+        historyBody._delegationAttached = false; // reseta flag para re-registrar
         historyBody.innerHTML = renderHistoryRows();
+        initHistoryEvents(); // [FIX 2] registra delegation após DOM populado
     }
 
     /**
@@ -865,6 +921,12 @@ window.priceIntelligence = (function () {
             .then((result) => {
                 if (result.isConfirmed) {
                     localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+
+                    // [FIX 3] Invalida cache em memória e sessionStorage ao limpar histórico.
+                    // Sem isso, resultados antigos permaneciam visíveis na sessão atual.
+                    searchCache = {};
+                    try { sessionStorage.removeItem('price_search_cache'); } catch (e) {}
+
                     loadHistory();
                     window.utils.showToast('Histórico limpo', 'info');
                 }
