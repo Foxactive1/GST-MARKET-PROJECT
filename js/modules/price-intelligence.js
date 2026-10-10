@@ -134,6 +134,16 @@ window.priceIntelligence = (function () {
         if (!localStorage.getItem(STORAGE_KEY)) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
         }
+        // Migra o histórico legado para o estado sincronizado quando o servidor ainda não o possui.
+        try {
+            const syncedHistory = window.state?.getPriceHistory?.() || [];
+            const legacyHistory = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            if (!syncedHistory.length && Array.isArray(legacyHistory) && legacyHistory.length) {
+                window.state?.setPriceHistory?.(legacyHistory.slice(-MAX_HISTORY));
+            }
+        } catch (e) {
+            console.warn('Não foi possível migrar o histórico de preços:', e);
+        }
         // Restaura cache da sessão (válido apenas enquanto a aba estiver aberta)
         try {
             const cached = sessionStorage.getItem('price_search_cache');
@@ -436,10 +446,11 @@ window.priceIntelligence = (function () {
             `;
         }
 
+        let timeoutId;
         try {
             // AbortController para timeout — compatível com Chrome/Android antigo
             const controller = new AbortController();
-            const timeoutId  = setTimeout(() => controller.abort(), 10000); // 10s
+            timeoutId = setTimeout(() => controller.abort(), 10000); // 10s
 
             if (!window.gstApi?.isConfigured()) {
                 throw new Error('Configure a URL do backend em js/api-config.js para ativar a pesquisa.');
