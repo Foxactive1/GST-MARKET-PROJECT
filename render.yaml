@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn backend.wsgi:app
+    startCommand: flask --app backend.wsgi:app db upgrade && gunicorn backend.wsgi:app
     healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
