@@ -37,7 +37,8 @@ window.gstApi = (function () {
     let response;
     try {
       response = await fetch(base + path, { ...options, headers });
-    } catch (_) {
+    } catch (error) {
+      if (options.signal?.aborted) throw error;
       throw new Error('Não foi possível conectar à API. Verifique a conexão e tente novamente.');
     }
     const body = await response.json().catch(() => ({}));
