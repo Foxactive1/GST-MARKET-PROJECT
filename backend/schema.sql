@@ -1,5 +1,5 @@
 -- GST Market — schema inicial para PostgreSQL/Neon
--- Execute somente em um banco Neon novo, antes de iniciar a API.
+-- Use em um banco Neon novo; também é seguro após aplicar a migração 0001.
 -- Este registro marca a migração 0001 como aplicada para o Flask-Migrate.
 
 BEGIN;
