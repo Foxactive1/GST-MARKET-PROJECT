@@ -28,10 +28,10 @@ O serviço também aplica essa migração automaticamente ao iniciar. O script S
 ## Publicação
 
 1. Publique o serviço web deste repositório no Render usando o `render.yaml`.
-2. Configure `DATABASE_URL` com a URL pooled do Neon e `CORS_ORIGINS` com a origem exata da PWA (sem barra final). Render gera `SECRET_KEY` e `JWT_SECRET_KEY`.
+2. Configure `DATABASE_URL` com a URL pooled do Neon e `CORS_ORIGINS` com a origem exata da PWA (sem barra final). Render gera `SECRET_KEY` e `JWT_SECRET_KEY`. A busca de preços usa a rota autenticada `/api/price-search`; se a API do Mercado Livre exigir credencial para sua aplicação, configure `MERCADOLIBRE_ACCESS_TOKEN` como variável secreta.
 3. O comando de inicialização do Render aplica as migrações versionadas antes de iniciar a API.
 4. Crie o primeiro usuário no shell do serviço: `flask --app backend.wsgi:app create-admin`. Use `create-user` para cadastrar operadores/admins adicionais.
-5. Copie a URL HTTPS do serviço para `GST_API_BASE_URL` em `js/api-config.js` e publique novamente o frontend.
+5. Copie a URL HTTPS do serviço para `GST_API_BASE_URL` em `js/api-config.js` e publique novamente o frontend. Essa configuração também é necessária para a pesquisa de preços, que passa pelo backend.
 
 O health check em `/api/health` confirma que a API consegue consultar o Neon. A integração de backend só é ativada quando `GST_API_BASE_URL` tem uma URL; vazia, a demonstração continua usando o login local já existente.
 
