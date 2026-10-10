@@ -10,7 +10,7 @@
  * - Stale While Revalidate:  Páginas HTML
  */
 
-const CACHE_VERSION = 'v1.0.3';
+const CACHE_VERSION = 'v1.0.4';
 
 // Caches separados por tipo — facilita invalidação seletiva
 const CACHE_STATIC  = `gst-static-${CACHE_VERSION}`;
@@ -45,6 +45,8 @@ const STATIC_ASSETS = [
   `${BASE}js/app.js`,
   `${BASE}js/utils.js`,
   `${BASE}js/state.js`,
+  `${BASE}js/api-config.js`,
+  `${BASE}js/api-client.js`,
   `${BASE}js/theme.js`,
   `${BASE}js/commands.js`,
   `${BASE}js/init.js`,
@@ -151,6 +153,10 @@ self.addEventListener('fetch', event => {
   if (isCdnResource(url))    return event.respondWith(cacheFirst(request, CACHE_CDN));
   if (isStaticAsset(url))    return event.respondWith(cacheFirst(request, CACHE_STATIC));
   if (isImage(url))          return event.respondWith(cacheFirst(request, CACHE_IMAGES));
+  // Respostas autenticadas nunca entram no Cache API do navegador.
+  if (isApiRequest(url) && request.headers.has('Authorization')) {
+    return event.respondWith(fetch(request));
+  }
   if (isApiRequest(url))     return event.respondWith(networkFirst(request, CACHE_DYNAMIC));
   /* default: HTML pages */  event.respondWith(staleWhileRevalidate(request, CACHE_DYNAMIC));
 });

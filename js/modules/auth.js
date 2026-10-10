@@ -46,39 +46,63 @@ window.auth = (function() {
     }
 
     async function login(username, password, rememberMe = false) {
+        if (window.gstApi?.isConfigured()) {
+            const result = await window.gstApi.login(username, password);
+            const user = result.user;
+            const authData = { user, timestamp: Date.now(), token: result.access_token };
+            const storage = rememberMe ? localStorage : sessionStorage;
+            storage.setItem(AUTH_KEY, JSON.stringify(authData));
+            await window.gstApi.restoreState();
+            return { success: true, user };
+        }
         return new Promise((resolve, reject) => {
             setTimeout(() => {
-                // Procura o usuário no array MOCK_USERS
                 const user = MOCK_USERS.find(u => u.username === username && u.password === password);
-                if (user) {
-                    const authData = {
-                        user: {
-                            username: user.username,
-                            nome: user.nome,
-                            email: user.email,
-                            role: user.role
-                        },
-                        timestamp: Date.now(),
-                        token: 'fake-jwt-token-' + Math.random().toString(36).substring(2)
-                    };
-
-                    const storage = rememberMe ? localStorage : sessionStorage;
-                    storage.setItem(AUTH_KEY, JSON.stringify(authData));
-
-                    // Se quiser armazenar no state (opcional), descomente:
-                    // if (window.state) window.state.user = authData.user;
-
-                    resolve({ success: true, user: authData.user });
-                } else {
+                if (!user) {
                     reject({ success: false, message: 'Usuário ou senha inválidos' });
+                    return;
                 }
-            }, 500);
+                const authData = {
+                    user: { username: user.username, nome: user.nome, email: user.email, role: user.role },
+                    timestamp: Date.now(),
+                    token: 'fake-jwt-token-' + Math.random().toString(36).substring(2)
+                };
+                const storage = rememberMe ? localStorage : sessionStorage;
+                storage.setItem(AUTH_KEY, JSON.stringify(authData));
+                resolve({ success: true, user: authData.user });
+            }, 350);
         });
+    }
+
+    async function restoreSession() {
+        if (!isAuthenticated()) return false;
+        if (!window.gstApi?.isConfigured()) return true;
+        try {
+            const result = await window.gstApi.request('/auth/me');
+            const stored = localStorage.getItem(AUTH_KEY) || sessionStorage.getItem(AUTH_KEY);
+            const authData = JSON.parse(stored);
+            authData.user = result.user;
+            const storage = localStorage.getItem(AUTH_KEY) ? localStorage : sessionStorage;
+            storage.setItem(AUTH_KEY, JSON.stringify(authData));
+            await window.gstApi.restoreState();
+            return true;
+        } catch (error) {
+            if (!error.status) {
+                window.utils?.showToast?.('Sem conexão com a API. Abrindo os dados salvos neste dispositivo.', 'warning');
+                return true;
+            }
+            localStorage.removeItem(AUTH_KEY);
+            sessionStorage.removeItem(AUTH_KEY);
+            window.gstApi.clearSession();
+            console.warn('[Auth] Sessão remota inválida:', error.message);
+            return false;
+        }
     }
 
     function logout() {
         localStorage.removeItem(AUTH_KEY);
         sessionStorage.removeItem(AUTH_KEY);
+        window.gstApi?.clearSession?.();
 
         // Remove referência no state (se tiver)
         // if (window.state) window.state.user = null;
@@ -136,7 +160,7 @@ window.auth = (function() {
                         </div>
                         <div class="card-footer text-center py-3">
                             <small class="text-muted">
-                                Use <strong>admin / admin</strong> (administrador) ou <strong>operador / operador</strong> (operador)
+                                ${window.gstApi?.isConfigured() ? 'Entre com um usuário cadastrado no backend.' : 'Use admin / admin ou operador / operador na demonstração local.'}
                             </small>
                         </div>
                     </div>
@@ -210,6 +234,7 @@ window.auth = (function() {
     return {
         isAuthenticated,
         getUser,
+        restoreSession,
         login,
         logout,
         render,

@@ -22,6 +22,7 @@
 - [Features](#-features)
 - [Demo](#-demo)
 - [Tecnologias](#-tecnologias)
+- [Backend API com Neon](#backend-api-com-neon)
 - [Instalação](#-instalação)
 - [Uso](#-uso)
 - [Atalhos de Teclado](#%EF%B8%8F-atalhos-de-teclado)
@@ -160,6 +161,16 @@ Acesse a demo: [https://supermercado-pro-demo.netlify.app](https://supermercado-
 - **Event-driven** - Comunicação via eventos
 
 ---
+
+## Backend API com Neon
+
+O backend Flask usa PostgreSQL no Neon para armazenar lojas, contas com senha protegida e o estado sincronizado da PWA. Configure e publique a API seguindo o [guia do backend](./backend/README.md).
+
+- A API é ativada quando `GST_API_BASE_URL` em `js/api-config.js` recebe a URL HTTPS do serviço.
+- Com a configuração vazia, o app continua na demonstração local com armazenamento no navegador.
+- Quando a API está configurada, o login usa as contas criadas no backend; dados sincronizam após autenticar.
+- O app mantém uma cópia local para uso offline. Conflitos de edição entre sessões retornam aviso antes de substituir dados.
+- Segredos do Neon e as chaves de assinatura ficam somente nas variáveis de ambiente do backend.
 
 ## 📥 Instalação
 
