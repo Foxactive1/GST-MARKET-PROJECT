@@ -97,7 +97,15 @@ bootApplication();
 BOOT DO SISTEMA
 */
 
-function bootApplication(){
+async function bootApplication(){
+
+if (window.auth?.isAuthenticated() && window.auth.restoreSession) {
+  const restored = await window.auth.restoreSession();
+  if (!restored) {
+    switchView('login');
+    return;
+  }
+}
 
 if(!window.auth || !window.auth.isAuthenticated()){
 
