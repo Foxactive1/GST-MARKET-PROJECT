@@ -36,7 +36,7 @@ def create_app(test_config=None):
         SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 300},
         JWT_SECRET_KEY=os.getenv("JWT_SECRET_KEY") or os.getenv("SECRET_KEY") or ("dev-only-change-me" if os.getenv("FLASK_ENV") != "production" else None),
         JWT_ACCESS_TOKEN_EXPIRES=timedelta(hours=8),
-        MAX_CONTENT_LENGTH=2 * 1024 * 1024,
+        MAX_CONTENT_LENGTH=16 * 1024 * 1024,
     )
     if test_config:
         app.config.update(test_config)
@@ -130,12 +130,18 @@ def create_app(test_config=None):
         except Exception:
             db.session.rollback()
             app.logger.exception("State save failed")
+            current = StoreState.query.filter_by(store_id=store_id).first()
+            if current and current.version != expected:
+                return jsonify(error="O estado remoto foi alterado em outra sessão.",
+                               code="VERSION_CONFLICT", version=current.version,
+                               state=current.payload), 409
+            app.logger.exception("State save failed")
             return jsonify(error="Não foi possível salvar no banco."), 500
         return jsonify(version=row.version, updated_at=row.updated_at.isoformat()), 200
 
     @app.errorhandler(413)
     def too_large(_error):
-        return jsonify(error="O corpo da requisição excede 2 MB."), 413
+        return jsonify(error="O corpo da requisição excede 16 MB."), 413
 
     @app.errorhandler(500)
     def internal_error(_error):
