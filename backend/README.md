@@ -19,6 +19,12 @@ flask --app backend.wsgi:app run
 
 A conexão deve ser copiada do painel Neon. Use a connection string pooled para executar a API; mantenha o segredo apenas nas variáveis do serviço. Não commite o arquivo `.env`.
 
+## Criar as tabelas pelo Neon SQL Editor
+
+Se quiser criar o esquema manualmente no painel do Neon, abra o SQL Editor da branch/banco corretos e execute o arquivo [schema.sql](./schema.sql). Ele cria `stores`, `users`, `store_state` e `alembic_version`; o registro de versão permite que o comando `flask db upgrade` do serviço Render reconheça a migração inicial como aplicada.
+
+O serviço também aplica essa migração automaticamente ao iniciar. O script SQL pode ser usado antes ou depois desse primeiro deploy. Em banco novo, não é necessário criar as tabelas pelos dois caminhos.
+
 ## Publicação
 
 1. Publique o serviço web deste repositório no Render usando o `render.yaml`.
