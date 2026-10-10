@@ -140,8 +140,8 @@ class ThemeManager {
      */
     updateMetaThemeColor(theme) {
         const colors = {
-            light: '#0d6efd',
-            dark: '#1a1a1a'
+            light: '#087f5b',
+            dark: '#111b17'
         };
         
         let metaTag = document.querySelector('meta[name="theme-color"]');
