@@ -119,6 +119,7 @@ def upgrade():
         sa.Column("closed_at", sa.DateTime(timezone=True)),
         _raw(),
     )
+    op.create_index("ix_cashier_sessions_store_id", "cashier_sessions", ["store_id"])
     op.create_index("ix_cashier_sessions_store_status", "cashier_sessions", ["store_id", "status"])
 
     op.create_table(
