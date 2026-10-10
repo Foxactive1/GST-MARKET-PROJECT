@@ -129,7 +129,6 @@ def create_app(test_config=None):
             db.session.commit()
         except Exception:
             db.session.rollback()
-            app.logger.exception("State save failed")
             current = StoreState.query.filter_by(store_id=store_id).first()
             if current and current.version != expected:
                 return jsonify(error="O estado remoto foi alterado em outra sessão.",
