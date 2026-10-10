@@ -57,14 +57,22 @@ window.gstApi = (function () {
   }
 
   async function restoreState() {
-    const result = await request('/state');
-    version = Number.isInteger(result.version) ? result.version : 0;
-    if (result.state && window.state?.replaceFromServer) {
-      window.state.replaceFromServer(result.state);
-      return true;
+    try {
+      const result = await request('/state');
+      version = Number.isInteger(result.version) ? result.version : 0;
+      if (result.state && window.state?.replaceFromServer) {
+        window.state.replaceFromServer(result.state);
+        return true;
+      }
+      queueStateSave(window.state?.get?.());
+      return false;
+    } catch (error) {
+      if (!error.status) {
+        console.warn('[GST API] Usando dados locais até a conexão voltar.');
+        return false;
+      }
+      throw error;
     }
-    queueStateSave(window.state?.get?.());
-    return false;
   }
 
   function queueStateSave(state) {
