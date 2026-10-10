@@ -87,6 +87,10 @@ window.auth = (function() {
             await window.gstApi.restoreState();
             return true;
         } catch (error) {
+            if (!error.status) {
+                window.utils?.showToast?.('Sem conexão com a API. Abrindo os dados salvos neste dispositivo.', 'warning');
+                return true;
+            }
             localStorage.removeItem(AUTH_KEY);
             sessionStorage.removeItem(AUTH_KEY);
             window.gstApi.clearSession();
