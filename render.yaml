@@ -2,7 +2,7 @@ services:
   - type: web
     name: gst-market-api
     runtime: python
-    plan: starter
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn backend.wsgi:app
     healthCheckPath: /api/health
