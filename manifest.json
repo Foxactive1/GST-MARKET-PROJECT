@@ -8,7 +8,7 @@
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#ffffff",
-  "theme_color": "#0d6efd",
+  "theme_color": "#087f5b",
   "orientation": "any",
   "categories": ["business", "productivity", "finance"],
   "lang": "pt-BR",
