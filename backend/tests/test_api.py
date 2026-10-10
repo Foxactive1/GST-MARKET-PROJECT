@@ -1,4 +1,6 @@
+import json
 import unittest
+from unittest.mock import MagicMock, patch
 
 from werkzeug.security import generate_password_hash
 
@@ -51,6 +53,50 @@ class ApiTestCase(unittest.TestCase):
             "username": "admin", "password": "errada"
         })
         self.assertEqual(response.status_code, 401)
+
+    def test_price_search_requires_authentication(self):
+        response = self.client.get("/api/price-search?q=arroz")
+        self.assertEqual(response.status_code, 401)
+
+    def test_price_search_normalizes_marketplace_results(self):
+        token = self._token()
+        upstream = MagicMock()
+        upstream.__enter__.return_value.read.return_value = json.dumps({
+            "results": [
+                {
+                    "id": "MLB123",
+                    "title": "Arroz 5kg",
+                    "price": 24.9,
+                    "seller": {"id": 42},
+                    "permalink": "https://produto.mercadolivre.com.br/MLB123",
+                    "thumbnail": "https://img.example/arroz.jpg",
+                    "currency_id": "BRL",
+                },
+                {"title": "Produto sem preço", "price": None},
+            ]
+        }).encode("utf-8")
+
+        with patch("backend.urlopen", return_value=upstream) as mocked:
+            response = self.client.get(
+                "/api/price-search?q=arroz%205kg",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        result = response.get_json()
+        self.assertEqual(result["provider"], "Mercado Livre")
+        self.assertEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["title"], "Arroz 5kg")
+        self.assertEqual(result["results"][0]["seller"]["nickname"], "Vendedor 42")
+        self.assertIn("sites/MLB/search", mocked.call_args.args[0].full_url)
+
+    def test_price_search_rejects_empty_query(self):
+        token = self._token()
+        response = self.client.get(
+            "/api/price-search?q= ",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(response.status_code, 400)
 
     def test_state_requires_auth_and_uses_optimistic_version(self):
         self.assertEqual(self.client.get("/api/state").status_code, 401)
