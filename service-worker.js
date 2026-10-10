@@ -10,7 +10,7 @@
  * - Stale While Revalidate:  Páginas HTML
  */
 
-const CACHE_VERSION = 'v1.0.1';
+const CACHE_VERSION = 'v1.0.2';
 
 // Caches separados por tipo — facilita invalidação seletiva
 const CACHE_STATIC  = `gst-static-${CACHE_VERSION}`;
@@ -41,6 +41,7 @@ const STATIC_ASSETS = [
   `${BASE}index.html`,
   `${BASE}manifest.json`,
   `${BASE}css/style.css`,
+  `${BASE}css/interface-polish.css`,
   `${BASE}js/app.js`,
   `${BASE}js/utils.js`,
   `${BASE}js/state.js`,
