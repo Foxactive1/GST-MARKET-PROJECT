@@ -1,6 +1,10 @@
 """Flask API for GST Market, backed by PostgreSQL/Neon."""
+import json
 import os
 from datetime import timedelta
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request as UrlRequest, urlopen
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
@@ -96,6 +100,63 @@ def create_app(test_config=None):
         from flask_jwt_extended import get_jwt
         claims = get_jwt()
         return claims.get("store_id")
+
+    @app.get("/api/price-search")
+    @jwt_required()
+    def price_search():
+        """Search Mercado Livre listings through the authenticated backend."""
+        query = str(request.args.get("q", "")).strip()
+        if len(query) < 2:
+            return jsonify(error="Informe ao menos 2 caracteres para pesquisar."), 400
+        if len(query) > 100:
+            return jsonify(error="A pesquisa deve ter no máximo 100 caracteres."), 400
+
+        url = "https://api.mercadolibre.com/sites/MLB/search?" + urlencode({"q": query, "limit": 10})
+        headers = {"Accept": "application/json", "User-Agent": "GST-Market/1.0"}
+        access_token = os.getenv("MERCADOLIBRE_ACCESS_TOKEN", "").strip()
+        if access_token:
+            headers["Authorization"] = "Bearer " + access_token
+
+        try:
+            upstream_request = UrlRequest(url, headers=headers, method="GET")
+            with urlopen(upstream_request, timeout=10) as upstream:
+                payload = json.loads(upstream.read().decode("utf-8"))
+        except HTTPError as error:
+            app.logger.warning("Mercado Livre price search returned HTTP %s", error.code)
+            return jsonify(error="O Mercado Livre recusou a pesquisa. Tente novamente mais tarde."), 502
+        except (TimeoutError, URLError):
+            return jsonify(error="Não foi possível consultar o Mercado Livre agora."), 504
+        except (ValueError, UnicodeDecodeError):
+            app.logger.exception("Invalid response from Mercado Livre price search")
+            return jsonify(error="O Mercado Livre retornou uma resposta inválida."), 502
+        except Exception:
+            app.logger.exception("Mercado Livre price search failed")
+            return jsonify(error="Falha ao consultar preços externos."), 502
+
+        results = []
+        for item in payload.get("results", []):
+            try:
+                price_value = float(item.get("price") or 0)
+            except (TypeError, ValueError):
+                continue
+            title = str(item.get("title") or "").strip()
+            if not title or price_value <= 0:
+                continue
+            seller = item.get("seller") or {}
+            seller_name = str(seller.get("nickname") or "").strip()
+            if not seller_name and seller.get("id"):
+                seller_name = "Vendedor " + str(seller["id"])
+            results.append({
+                "id": str(item.get("id") or ""),
+                "title": title[:240],
+                "price": price_value,
+                "seller": {"nickname": seller_name or "Mercado Livre"},
+                "permalink": str(item.get("permalink") or ""),
+                "thumbnail": str(item.get("thumbnail") or ""),
+                "currency_id": str(item.get("currency_id") or "BRL"),
+            })
+
+        return jsonify(query=query, provider="Mercado Livre", results=results), 200
 
     @app.get("/api/state")
     @jwt_required()
