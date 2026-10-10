@@ -1,5 +1,5 @@
 -- GST Market — schema operacional PostgreSQL/Neon
--- Execute em um banco Neon novo. Registra a revisão inicial do Flask-Migrate.
+-- Execute em um banco Neon novo. Cria o esquema operacional e registra a revisão 0002.
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS stores (
@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS categories (
   created_at TIMESTAMPTZ NOT NULL,
   CONSTRAINT uq_categories_store_name UNIQUE (store_id, name)
 );
+CREATE INDEX IF NOT EXISTS ix_categories_store_id ON categories (store_id);
 
 CREATE TABLE IF NOT EXISTS suppliers (
   id VARCHAR(36) PRIMARY KEY,
@@ -116,6 +117,7 @@ CREATE TABLE IF NOT EXISTS cashier_sessions (
   closed_at TIMESTAMPTZ,
   raw_data JSONB NOT NULL DEFAULT '{}'::jsonb
 );
+CREATE INDEX IF NOT EXISTS ix_cashier_sessions_store_id ON cashier_sessions (store_id);
 CREATE INDEX IF NOT EXISTS ix_cashier_sessions_store_status ON cashier_sessions (store_id, status);
 
 CREATE TABLE IF NOT EXISTS sales (
@@ -135,6 +137,7 @@ CREATE TABLE IF NOT EXISTS sales (
   notes TEXT,
   raw_data JSONB NOT NULL DEFAULT '{}'::jsonb
 );
+CREATE INDEX IF NOT EXISTS ix_sales_store_id ON sales (store_id);
 CREATE INDEX IF NOT EXISTS ix_sales_store_sold_at ON sales (store_id, sold_at);
 CREATE INDEX IF NOT EXISTS ix_sales_store_client ON sales (store_id, client_id);
 
@@ -151,6 +154,7 @@ CREATE TABLE IF NOT EXISTS sale_items (
   line_total NUMERIC(14,2) NOT NULL,
   raw_data JSONB NOT NULL DEFAULT '{}'::jsonb
 );
+CREATE INDEX IF NOT EXISTS ix_sale_items_sale_id ON sale_items (sale_id);
 CREATE INDEX IF NOT EXISTS ix_sale_items_store_sale ON sale_items (store_id, sale_id);
 CREATE INDEX IF NOT EXISTS ix_sale_items_product ON sale_items (store_id, product_id);
 
@@ -167,6 +171,7 @@ CREATE TABLE IF NOT EXISTS stock_movements (
   occurred_at TIMESTAMPTZ NOT NULL,
   raw_data JSONB NOT NULL DEFAULT '{}'::jsonb
 );
+CREATE INDEX IF NOT EXISTS ix_stock_movements_store_id ON stock_movements (store_id);
 CREATE INDEX IF NOT EXISTS ix_stock_movements_store_date ON stock_movements (store_id, occurred_at);
 CREATE INDEX IF NOT EXISTS ix_stock_movements_product_date ON stock_movements (store_id, product_id, occurred_at);
 
@@ -195,6 +200,8 @@ CREATE TABLE IF NOT EXISTS fidelity_transactions (
   created_at TIMESTAMPTZ NOT NULL,
   raw_data JSONB NOT NULL DEFAULT '{}'::jsonb
 );
+CREATE INDEX IF NOT EXISTS ix_fidelity_transactions_store_id ON fidelity_transactions (store_id);
+CREATE INDEX IF NOT EXISTS ix_fidelity_transactions_client_id ON fidelity_transactions (client_id);
 CREATE INDEX IF NOT EXISTS ix_fidelity_transactions_client ON fidelity_transactions (store_id, client_id, created_at);
 
 CREATE TABLE IF NOT EXISTS purchase_orders (
@@ -213,6 +220,7 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
   raw_data JSONB NOT NULL DEFAULT '{}'::jsonb,
   CONSTRAINT uq_purchase_orders_store_number UNIQUE (store_id, number)
 );
+CREATE INDEX IF NOT EXISTS ix_purchase_orders_store_id ON purchase_orders (store_id);
 CREATE INDEX IF NOT EXISTS ix_purchase_orders_store_status ON purchase_orders (store_id, status, created_at);
 
 CREATE TABLE IF NOT EXISTS purchase_order_items (
@@ -228,6 +236,7 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
   suggested_price NUMERIC(14,2),
   raw_data JSONB NOT NULL DEFAULT '{}'::jsonb
 );
+CREATE INDEX IF NOT EXISTS ix_purchase_order_items_purchase_order_id ON purchase_order_items (purchase_order_id);
 CREATE INDEX IF NOT EXISTS ix_purchase_order_items_order ON purchase_order_items (store_id, purchase_order_id);
 
 CREATE TABLE IF NOT EXISTS price_history (
@@ -240,6 +249,8 @@ CREATE TABLE IF NOT EXISTS price_history (
   observed_at TIMESTAMPTZ NOT NULL,
   raw_data JSONB NOT NULL DEFAULT '{}'::jsonb
 );
+CREATE INDEX IF NOT EXISTS ix_price_history_store_id ON price_history (store_id);
+CREATE INDEX IF NOT EXISTS ix_price_history_product_id ON price_history (product_id);
 CREATE INDEX IF NOT EXISTS ix_price_history_store_product_date ON price_history (store_id, product_id, observed_at);
 
 CREATE TABLE IF NOT EXISTS store_state (
@@ -253,7 +264,7 @@ CREATE TABLE IF NOT EXISTS alembic_version (
   version_num VARCHAR(32) NOT NULL PRIMARY KEY
 );
 INSERT INTO alembic_version (version_num)
-VALUES ('0001_initial')
-ON CONFLICT (version_num) DO NOTHING;
+VALUES ('0002_retail_tables')
+ON CONFLICT (version_num) DO UPDATE SET version_num = EXCLUDED.version_num;
 
 COMMIT;
