@@ -263,8 +263,7 @@ CREATE TABLE IF NOT EXISTS store_state (
 CREATE TABLE IF NOT EXISTS alembic_version (
   version_num VARCHAR(32) NOT NULL PRIMARY KEY
 );
-INSERT INTO alembic_version (version_num)
-VALUES ('0002_retail_tables')
-ON CONFLICT (version_num) DO UPDATE SET version_num = EXCLUDED.version_num;
+DELETE FROM alembic_version;
+INSERT INTO alembic_version (version_num) VALUES ('0002_retail_tables');
 
 COMMIT;
