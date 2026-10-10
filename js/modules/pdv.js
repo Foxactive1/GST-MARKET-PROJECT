@@ -55,6 +55,7 @@ window.pdv = (function() {
     let suspendedSales = [];
     let currentFilter = 'all';
     let selectedClient = null;
+    let clientSelectorOpen = false;
     let globalDiscount = 0;
     let cashierSession = null;
     
@@ -401,7 +402,7 @@ window.pdv = (function() {
 
     function renderCartArea(state) {
         const itemCount = cart.reduce((sum, item) => sum + item.qty, 0);
-        const hasClient = selectedClient !== null;
+        const hasClient = Boolean(selectedClient && selectedClient.id);
         const cartTotal = calculateSubtotal() - calculateTotalDiscount();
 
         return `
@@ -470,28 +471,35 @@ window.pdv = (function() {
     }
 
     function renderClientSelector(clients) {
-        if (!selectedClient) return '';
+        const clientList = Array.isArray(clients) ? clients : [];
+        const hasSelectedClient = Boolean(selectedClient && selectedClient.id);
+        const isVisible = clientSelectorOpen;
+
         return `
-            <div id="client-select-area" class="pdv-client-area">
+            <div id="client-select-area" class="pdv-client-area" ${isVisible ? '' : 'style="display:none;"'}>
                 <div class="pdv-client-header">
                     <span class="pdv-client-label">
                         <i class="bi bi-person-circle"></i> Cliente
                     </span>
-                    <button class="pdv-client-remove" onclick="window.pdv.removeClient()">
-                        <i class="bi bi-x"></i> Remover
-                    </button>
+                    ${hasSelectedClient ? `
+                        <button class="pdv-client-remove" onclick="window.pdv.removeClient()">
+                            <i class="bi bi-x"></i> Remover
+                        </button>
+                    ` : ''}
                 </div>
                 <select id="cart-client"
                         class="form-select form-select-sm pdv-client-select"
+                        aria-label="Selecionar cliente para a venda"
                         onchange="window.pdv.updateSelectedClient(this.value)">
-                    <option value="">Selecione um cliente...</option>
-                    ${clients.map(c => `
-                        <option value="${c.id}" ${selectedClient && selectedClient.id === c.id ? 'selected' : ''}>
+                    <option value="" ${hasSelectedClient ? '' : 'selected'}>Selecione um cliente...</option>
+                    ${clientList.map(c => `
+                        <option value="${c.id}" ${hasSelectedClient && selectedClient.id === c.id ? 'selected' : ''}>
                             ${c.nome} - ${c.fid || 'Sem codigo'} (${c.points || 0} pts)
                         </option>
                     `).join('')}
                 </select>
-                ${selectedClient && selectedClient.id ? renderClientInfo(selectedClient) : ''}
+                ${clientList.length === 0 ? '<small class="text-muted">Nenhum cliente cadastrado. Cadastre um cliente no módulo Clientes.</small>' : ''}
+                ${hasSelectedClient ? renderClientInfo(selectedClient) : ''}
             </div>
         `;
     }
@@ -1192,36 +1200,35 @@ window.pdv = (function() {
     // ========================================
     
     function toggleClient() {
-    if (selectedClient) {
-        selectedClient = null;
-    } else {
-        selectedClient = {};
+        clientSelectorOpen = !clientSelectorOpen;
+        updateClientSelector();
+        updateCart();
     }
 
-    // Atualizar apenas a área de seleção de cliente
-    const clientArea = document.getElementById('client-select-area');
-    if (clientArea) {
+    function updateClientSelector() {
+        const clientArea = document.getElementById('client-select-area');
+        if (!clientArea) return;
+
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = renderClientSelector(window.state.getClients());
         const newClientArea = tempDiv.firstElementChild;
         if (newClientArea) clientArea.replaceWith(newClientArea);
     }
-    updateCart();
-}
+
     function updateSelectedClient(clientId) {
-        if (!clientId) {
-            selectedClient = null;
-        } else {
-            const client = window.state.getClients().find(c => c.id === clientId);
-            selectedClient = client || null;
-        }
-        
+        selectedClient = clientId
+            ? window.state.getClients().find(client => client.id === clientId) || null
+            : null;
+        clientSelectorOpen = true;
+        updateClientSelector();
         updateCart();
     }
-    
+
     function removeClient() {
         selectedClient = null;
-        toggleClient();
+        clientSelectorOpen = true;
+        updateClientSelector();
+        updateCart();
         window.utils.showToast('Cliente removido', 'info');
     }
     
