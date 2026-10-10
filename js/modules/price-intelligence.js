@@ -25,8 +25,8 @@
  *                Elimina memory leak e erro "Canvas is already in use" do Chart.js
  *                ao navegar entre módulos e retornar ao painel de preços.
  *
- * DEPENDÊNCIA BACKEND: adicionar ao app.py a rota /api/price-search
- * (ver comentário no bloco de constantes abaixo)
+ * A pesquisa usa a rota autenticada /api/price-search do backend configurado.
+ * O histórico sincroniza pelo estado local e pelo snapshot autenticado da PWA.
  *
  * @author Dione Castro Alves - InNovaIdeia
  * @version 3.3.0
@@ -71,28 +71,7 @@ window.priceIntelligence = (function () {
     // CONSTANTES
     // ========================================
 
-    /*
-     * ROTA FLASK NECESSÁRIA — adicionar ao app.py:
-     *
-     * import requests
-     * from flask import request, jsonify
-     *
-     * @app.route('/api/price-search')
-     * def price_search():
-     *     query = request.args.get('q', '').strip()
-     *     if not query:
-     *         return jsonify({'error': 'Parâmetro q obrigatório'}), 400
-     *     try:
-     *         url  = f'https://api.mercadolibre.com/sites/MLB/search?q={requests.utils.quote(query)}&limit=10'
-     *         resp = requests.get(url, timeout=10)
-     *         resp.raise_for_status()
-     *         return jsonify(resp.json())
-     *     except requests.exceptions.Timeout:
-     *         return jsonify({'error': 'Timeout ao consultar Mercado Livre'}), 504
-     *     except requests.exceptions.RequestException as e:
-     *         return jsonify({'error': str(e)}), 502
-     */
-    const ML_PROXY_URL   = '/api/price-search?q='; // proxy local Flask — sem CORS
+    // A busca sempre passa pelo cliente autenticado GST API.
     const STORAGE_KEY    = 'price_intelligence_history';
     const MAX_RESULTS    = 10;
     const MAX_HISTORY    = 200;    // limite de entradas no localStorage
