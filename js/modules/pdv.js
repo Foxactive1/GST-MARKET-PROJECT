@@ -473,7 +473,7 @@ window.pdv = (function() {
     function renderClientSelector(clients) {
         const clientList = Array.isArray(clients) ? clients : [];
         const hasSelectedClient = Boolean(selectedClient && selectedClient.id);
-        const isVisible = clientSelectorOpen || hasSelectedClient;
+        const isVisible = clientSelectorOpen;
 
         return `
             <div id="client-select-area" class="pdv-client-area" ${isVisible ? '' : 'style="display:none;"'}>
