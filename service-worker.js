@@ -153,6 +153,10 @@ self.addEventListener('fetch', event => {
   if (isCdnResource(url))    return event.respondWith(cacheFirst(request, CACHE_CDN));
   if (isStaticAsset(url))    return event.respondWith(cacheFirst(request, CACHE_STATIC));
   if (isImage(url))          return event.respondWith(cacheFirst(request, CACHE_IMAGES));
+  // Respostas autenticadas nunca entram no Cache API do navegador.
+  if (isApiRequest(url) && request.headers.has('Authorization')) {
+    return event.respondWith(fetch(request));
+  }
   if (isApiRequest(url))     return event.respondWith(networkFirst(request, CACHE_DYNAMIC));
   /* default: HTML pages */  event.respondWith(staleWhileRevalidate(request, CACHE_DYNAMIC));
 });
