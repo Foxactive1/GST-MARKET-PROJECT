@@ -169,6 +169,9 @@ window.state = (function() {
                 invalidateCache();
                 notifyListeners();
                 autoBackup();
+                if (window.gstApi?.isConfigured() && window.auth?.isAuthenticated()) {
+                    window.gstApi.queueStateSave(state);
+                }
             } catch (e) {
                 console.error('[State] Erro ao persistir estado:', e);
             } finally {
@@ -483,6 +486,32 @@ window.state = (function() {
     // Alias: pedidos.js usa getFornecedores, state tem getSuppliers
     function getFornecedores() { return getSuppliers(); }
 
+    // Substitui o cache local após recuperar o snapshot autenticado do servidor.
+    function replaceFromServer(remoteState) {
+        if (!remoteState || typeof remoteState !== 'object' || Array.isArray(remoteState)) return false;
+        if (saveTimeout) {
+            clearTimeout(saveTimeout);
+            saveTimeout = null;
+        }
+        state = {
+            ...JSON.parse(JSON.stringify(initialState)),
+            ...JSON.parse(JSON.stringify(remoteState))
+        };
+        state.products = (state.products || []).map(function(p) {
+            return { ...defaultProductFields, ...p };
+        });
+        invalidateCache();
+        try {
+            var toStore = JSON.stringify(state);
+            if (typeof LZString !== 'undefined') toStore = LZString.compress(toStore);
+            localStorage.setItem('supermarket-state', toStore);
+        } catch (e) {
+            console.error('[State] Falha ao salvar snapshot local:', e);
+        }
+        notifyListeners();
+        return true;
+    }
+
     // =========================================================================
     // RESET E SEED
     // =========================================================================
@@ -518,6 +547,7 @@ window.state = (function() {
     var api = {
         // Leitura
         get: get,
+        replaceFromServer: replaceFromServer,
         getProducts: getProducts,
         getClients: getClients,
         getSuppliers: getSuppliers,
