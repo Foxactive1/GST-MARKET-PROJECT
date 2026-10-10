@@ -96,7 +96,8 @@ window.priceIntelligence = (function () {
     const STORAGE_KEY    = 'price_intelligence_history';
     const MAX_RESULTS    = 10;
     const MAX_HISTORY    = 200;    // limite de entradas no localStorage
-    const DEFAULT_MARKUP = 1.20;   // 20% sobre a média de mercado
+    const DEFAULT_MIN_MARGIN = 0.20; // protege margem mínima quando há custo cadastrado
+    const COMPETITIVE_UNDERCUT = 0.05; // pequena vantagem sobre o menor preço comparável
     const CACHE_DURATION = 10 * 60 * 1000; // 10 minutos em ms
 
     // ========================================
@@ -245,8 +246,7 @@ window.priceIntelligence = (function () {
                     <!-- Aviso exibido quando não há histórico suficiente para média -->
                     <div class="alert alert-warning d-none" id="analysis-no-history">
                         <i class="bi bi-exclamation-circle"></i>
-                        Histórico insuficiente para calcular a média de mercado.
-                        O preço sugerido foi calculado com base no preço atual pesquisado.
+                        Ainda há poucos registros para formar um histórico. A sugestão usa a cotação escolhida e respeita o custo cadastrado quando disponível.
                     </div>
                     <div class="row g-4">
                         <div class="col-md-6">
@@ -255,11 +255,11 @@ window.priceIntelligence = (function () {
                                 <div class="metric-value" id="analysis-our-price">R$ 0,00</div>
                             </div>
                             <div class="metric-card mt-2">
-                                <div class="metric-label">Média do Mercado (últimos 30 dias)</div>
+                                <div class="metric-label">Média dos preços comparáveis</div>
                                 <div class="metric-value text-primary" id="analysis-market-avg">R$ 0,00</div>
                             </div>
                             <div class="metric-card mt-2">
-                                <div class="metric-label">Preço Sugerido (com markup de 20%)</div>
+                                <div class="metric-label">Preço sugerido (competitividade e margem)</div>
                                 <div class="metric-value text-success" id="analysis-suggested">R$ 0,00</div>
                             </div>
                         </div>
@@ -441,19 +441,14 @@ window.priceIntelligence = (function () {
             const controller = new AbortController();
             const timeoutId  = setTimeout(() => controller.abort(), 10000); // 10s
 
-            const response = await fetch(ML_PROXY_URL + encodeURIComponent(query), {
-                method:  'GET',
-                headers: { 'Accept': 'application/json' },
-                signal:  controller.signal
-            });
+            if (!window.gstApi?.isConfigured()) {
+                throw new Error('Configure a URL do backend em js/api-config.js para ativar a pesquisa.');
+            }
+            const data = await window.gstApi.request(
+                '/price-search?q=' + encodeURIComponent(query),
+                { method: 'GET', signal: controller.signal }
+            );
             clearTimeout(timeoutId);
-
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-            const data = await response.json();
-
-            // Trata erro estruturado retornado pelo Flask
-            if (data.error) throw new Error(data.error);
 
             const results = (data.results || []).slice(0, MAX_RESULTS);
 
@@ -469,6 +464,7 @@ window.priceIntelligence = (function () {
             renderResults(results, query);
 
         } catch (error) {
+            clearTimeout(timeoutId);
             console.error('Erro na pesquisa de preços:', error);
 
             const isTimeout = error.name === 'AbortError';
@@ -598,26 +594,33 @@ window.priceIntelligence = (function () {
     }
 
     function showComparisonGraph(product, marketItem) {
-        document.getElementById('analysis-card').style.display = 'block';
+        const analysisCard = document.getElementById('analysis-card');
+        if (!analysisCard) return;
+        analysisCard.style.display = 'block';
+        const ourPrice = Number(product.preco) || 0;
         document.getElementById('analysis-our-price').textContent =
-            `R$ ${window.utils.formatCurrency(product.preco)}`;
+            `R$ ${window.utils.formatCurrency(ourPrice)}`;
 
-        // [FIX] Se não há histórico suficiente, usa preço atual como fallback e avisa
-        let marketAvg        = getMarketAverage(product.nome);
-        let noHistoryWarning = false;
-
-        if (marketAvg === 0) {
-            marketAvg        = marketItem.price || 0;
-            noHistoryWarning = true;
-        }
-
-        const suggested = marketAvg * DEFAULT_MARKUP;
+        const marketPrices = getComparablePrices(product, marketItem);
+        const marketAvg = marketPrices.length
+            ? marketPrices.reduce((sum, value) => sum + value, 0) / marketPrices.length
+            : 0;
+        const lowestMarketPrice = marketPrices.length ? Math.min(...marketPrices) : 0;
+        const cost = Number(product.cost) || 0;
+        const marginFloor = cost > 0 ? cost * (1 + DEFAULT_MIN_MARGIN) : 0.01;
+        const competitiveTarget = lowestMarketPrice > 0
+            ? Math.max(0.01, lowestMarketPrice - COMPETITIVE_UNDERCUT)
+            : 0;
+        const suggested = competitiveTarget > 0
+            ? Math.max(marginFloor, competitiveTarget)
+            : (cost > 0 ? marginFloor : ourPrice);
+        const noHistoryWarning = marketPrices.length < 2;
 
         const warningEl = document.getElementById('analysis-no-history');
         if (warningEl) warningEl.classList.toggle('d-none', !noHistoryWarning);
 
         document.getElementById('analysis-market-avg').textContent =
-            `R$ ${window.utils.formatCurrency(marketAvg)}`;
+            marketAvg > 0 ? `R$ ${window.utils.formatCurrency(marketAvg)}` : 'Sem cotação';
         document.getElementById('analysis-suggested').textContent =
             `R$ ${window.utils.formatCurrency(suggested)}`;
 
@@ -657,7 +660,7 @@ window.priceIntelligence = (function () {
         });
 
         // Gráfico de linha — tendência dos últimos 90 dias
-        const trendData = getPriceTrend(product.nome);
+        const trendData = getPriceTrend(product, marketItem);
         const ctxLine   = document.getElementById('trendChart').getContext('2d');
         if (charts.trend) charts.trend.destroy();
 
@@ -702,18 +705,23 @@ window.priceIntelligence = (function () {
      * @param {string} productName
      * @returns {number}
      */
-    function getMarketAverage(productName) {
-        const history = getHistory();
-        const cutoff  = new Date();
-        cutoff.setDate(cutoff.getDate() - 30);
+    function getComparablePrices(product, marketItem) {
+        const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        const productName = String(product?.nome || '').trim().toLocaleLowerCase();
+        const historyPrices = getHistory()
+            .filter(item => {
+                const observedAt = Date.parse(item.date);
+                if (!Number.isFinite(observedAt) || observedAt < cutoff || !(Number(item.price) > 0)) return false;
+                if (item.productId && item.productId === product.id) return true;
+                return !item.productId &&
+                    String(item.productName || '').trim().toLocaleLowerCase() === productName;
+            })
+            .map(item => Number(item.price))
+            .filter(Number.isFinite);
 
-        const relevant = history.filter(item =>
-            item.productName.toLowerCase().includes(productName.toLowerCase()) &&
-            new Date(item.date) >= cutoff
-        );
-
-        if (relevant.length === 0) return 0;
-        return relevant.reduce((acc, cur) => acc + cur.price, 0) / relevant.length;
+        const selectedPrice = Number(marketItem?.price) || 0;
+        if (selectedPrice > 0) historyPrices.push(selectedPrice);
+        return historyPrices;
     }
 
     /**
@@ -721,21 +729,26 @@ window.priceIntelligence = (function () {
      * @param {string} productName
      * @returns {{ dates: string[], prices: number[] }}
      */
-    function getPriceTrend(productName) {
-        const history = getHistory();
-        const cutoff  = new Date();
-        cutoff.setDate(cutoff.getDate() - 90);
-
-        const filtered = history
-            .filter(item =>
-                item.productName.toLowerCase().includes(productName.toLowerCase()) &&
-                new Date(item.date) >= cutoff
-            )
+    function getPriceTrend(product, marketItem) {
+        const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+        const productName = String(product?.nome || '').trim().toLocaleLowerCase();
+        const filtered = getHistory()
+            .filter(item => {
+                const observedAt = Date.parse(item.date);
+                if (!Number.isFinite(observedAt) || observedAt < cutoff || !(Number(item.price) > 0)) return false;
+                if (item.productId && item.productId === product.id) return true;
+                return !item.productId &&
+                    String(item.productName || '').trim().toLocaleLowerCase() === productName;
+            })
             .sort((a, b) => new Date(a.date) - new Date(b.date));
 
+        const points = filtered.map(item => ({ date: item.date, price: Number(item.price) }));
+        if (Number(marketItem?.price) > 0) {
+            points.push({ date: new Date().toISOString(), price: Number(marketItem.price) });
+        }
         return {
-            dates:  filtered.map(item => window.utils.formatDate(item.date)),
-            prices: filtered.map(item => item.price)
+            dates: points.map(item => window.utils.formatDate(item.date)),
+            prices: points.map(item => item.price)
         };
     }
 
@@ -876,7 +889,10 @@ window.priceIntelligence = (function () {
      */
     function getHistory() {
         try {
-            return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+            const synced = window.state?.getPriceHistory?.();
+            if (Array.isArray(synced) && synced.length) return synced;
+            const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            return Array.isArray(local) ? local : [];
         } catch (e) {
             console.error('Erro ao ler histórico:', e);
             return [];
@@ -893,6 +909,7 @@ window.priceIntelligence = (function () {
             ? history.slice(-MAX_HISTORY)
             : history;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+        window.state?.setPriceHistory?.(trimmed);
     }
 
     function exportHistory() {
@@ -921,6 +938,7 @@ window.priceIntelligence = (function () {
             .then((result) => {
                 if (result.isConfirmed) {
                     localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+                    window.state?.setPriceHistory?.([]);
 
                     // [FIX 3] Invalida cache em memória e sessionStorage ao limpar histórico.
                     // Sem isso, resultados antigos permaneciam visíveis na sessão atual.
