@@ -10,7 +10,7 @@
  * - Stale While Revalidate:  Páginas HTML
  */
 
-const CACHE_VERSION = 'v1.0.2';
+const CACHE_VERSION = 'v1.0.3';
 
 // Caches separados por tipo — facilita invalidação seletiva
 const CACHE_STATIC  = `gst-static-${CACHE_VERSION}`;
