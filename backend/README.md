@@ -21,7 +21,7 @@ A conexão deve ser copiada do painel Neon. Use a connection string pooled para 
 
 ## Criar as tabelas pelo Neon SQL Editor
 
-Se quiser criar o esquema manualmente no painel do Neon, abra o SQL Editor da branch/banco corretos e execute o arquivo [schema.sql](./schema.sql). Ele cria `stores`, `users`, `store_state` e `alembic_version`; o registro de versão permite que o comando `flask db upgrade` do serviço Render reconheça a migração inicial como aplicada.
+Se quiser criar o esquema manualmente no painel do Neon, abra o SQL Editor da branch/banco corretos e execute o arquivo [schema.sql](./schema.sql). Ele cria as tabelas relacionais de operação (`categories`, `suppliers`, `clients`, `products`, `inventory`, `sales`, itens, caixa, movimentos de estoque, fidelidade, pedidos de compra e histórico de preços), além de `stores`, `users` e `store_state`. O script registra a revisão `0002_retail_tables` para o Flask-Migrate.
 
 O serviço também aplica essa migração automaticamente ao iniciar. O script SQL pode ser usado antes ou depois desse primeiro deploy. Em banco novo, não é necessário criar as tabelas pelos dois caminhos.
 
@@ -45,6 +45,8 @@ O health check em `/api/health` confirma que a API consegue consultar o Neon. A 
 
 O primeiro `PUT` usa versão `0`. Atualizações de versões antigas recebem HTTP 409; a PWA preserva a cópia local e mostra uma mensagem para recarregar e resolver a divergência.
 
-## Limite desta primeira etapa
+## Como os dados são armazenados
 
-Para manter compatibilidade com a PWA offline já existente, produtos, clientes, fornecedores, vendas, pedidos, fidelidade e configuração são sincronizados como um snapshot JSON por mercado em `store_state`. As contas de usuário e lojas são relacionais. A senha é armazenada com hash, nunca no snapshot. Uma próxima etapa pode converter os módulos mais consultados em tabelas relacionais sem perder a experiência offline.
+O banco possui tabelas relacionais para produtos e estoque, clientes e fidelidade, fornecedores e pedidos de compra, vendas e itens, sessões de caixa, movimentos de estoque e histórico de preços. Cada registro operacional é associado à loja.
+
+Nesta etapa, a PWA ainda envia e recebe o estado completo em `store_state` para preservar o funcionamento offline e a compatibilidade atual. As tabelas relacionais estão criadas e modeladas, mas as rotas atuais ainda não projetam automaticamente o snapshot nessas tabelas. As senhas ficam somente na tabela de usuários, protegidas por hash.
